@@ -1,0 +1,42 @@
+@import "tailwindcss";
+
+@source "../**/*.blade.php";
+@source "../**/*.js";
+@source "../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php";
+@source "../../storage/framework/views/*.php";
+
+@plugin "daisyui";
+
+@plugin "daisyui/theme" {
+    name: "rq";
+    default: true;
+
+    --color-primary: #0F448A;
+    --color-primary-content: #ffffff;
+
+    --color-secondary: #363B3F;
+    --color-secondary-content: #ffffff;
+
+    --color-accent: #D9E021;
+    --color-accent-content: #1a1a1a;
+
+    --color-base-100: #ffffff;
+    --color-base-200: #F2F2F2;
+    --color-base-300: #e0e0e0;
+    --color-base-content: #1a1a1a;
+
+    --color-neutral: #374151;
+    --color-neutral-content: #ffffff;
+
+    --color-info: #3b82f6;
+    --color-info-content: #ffffff;
+
+    --color-success: #22c55e;
+    --color-success-content: #ffffff;
+
+    --color-warning: #f59e0b;
+    --color-warning-content: #ffffff;
+
+    --color-error: #ef4444;
+    --color-error-content: #ffffff;
+}

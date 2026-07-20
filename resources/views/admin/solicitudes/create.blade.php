@@ -1,0 +1,372 @@
+<x-app-layout>
+    <x-slot name="header">
+        <div class="flex items-center gap-2">
+            <a href="{{ route('admin.solicitudes.index') }}" class="btn btn-ghost btn-sm">←</a>
+            <h2 class="text-xl font-semibold">Nueva solicitud</h2>
+        </div>
+    </x-slot>
+
+    <div class="card bg-base-100 shadow max-w-3xl" x-data="solicitudForm()">
+        <div class="card-body">
+            <form method="POST" action="{{ route('admin.solicitudes.store') }}">
+                @csrf
+
+                {{-- Empresa / Sede / Contacto --}}
+                <h3 class="font-semibold text-base mb-3">Destino</h3>
+
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                    <div class="form-control">
+                        <label class="label"><span class="label-text">Empresa *</span></label>
+                        <select name="ID_EMPRESA" class="select select-bordered @error('ID_EMPRESA') select-error @enderror"
+                            @change="onEmpresaChange($event.target.value)">
+                            <option value="">Seleccionar...</option>
+                            @foreach($empresas as $empresa)
+                                <option value="{{ $empresa->id }}" {{ old('ID_EMPRESA') == $empresa->id ? 'selected' : '' }}>
+                                    {{ $empresa->nombre }}
+                                </option>
+                            @endforeach
+                        </select>
+                        @error('ID_EMPRESA')<p class="text-error text-sm mt-1">{{ $message }}</p>@enderror
+                        <button type="button" class="btn btn-ghost btn-xs mt-1 justify-start"
+                            onclick="document.getElementById('modal-nueva-empresa').showModal()">
+                            + Nueva empresa
+                        </button>
+                    </div>
+
+                    <div class="form-control">
+                        <label class="label"><span class="label-text">Sede *</span></label>
+                        <select name="ID_SEDE" class="select select-bordered @error('ID_SEDE') select-error @enderror"
+                            @change="onSedeChange($event.target.value)"
+                            :disabled="!sedes.length">
+                            <option value="">Seleccionar...</option>
+                            <template x-for="sede in sedes" :key="sede.id">
+                                <option :value="sede.id" x-text="sede.nombre"></option>
+                            </template>
+                        </select>
+                        @error('ID_SEDE')<p class="text-error text-sm mt-1">{{ $message }}</p>@enderror
+                        <button type="button" class="btn btn-ghost btn-xs mt-1 justify-start"
+                            x-show="empresaId"
+                            onclick="document.getElementById('modal-nueva-sede').showModal()">
+                            + Nueva sede
+                        </button>
+                    </div>
+
+                    <div class="form-control">
+                        <label class="label"><span class="label-text">Contacto *</span></label>
+                        <select name="ID_CONTACTO" class="select select-bordered @error('ID_CONTACTO') select-error @enderror"
+                            :disabled="!contactos.length"
+                            @change="onContactoChange($event.target.value)">
+                            <option value="">Seleccionar...</option>
+                            <template x-for="contacto in contactos" :key="contacto.id">
+                                <option :value="contacto.id" x-text="contacto.nombre + ' ' + contacto.apellidos"></option>
+                            </template>
+                        </select>
+                        @error('ID_CONTACTO')<p class="text-error text-sm mt-1">{{ $message }}</p>@enderror
+                        <button type="button" class="btn btn-ghost btn-xs mt-1 justify-start"
+                            x-show="sedeId"
+                            onclick="document.getElementById('modal-nuevo-contacto').showModal()">
+                            + Nuevo contacto
+                        </button>
+                    </div>
+                </div>
+
+                <div class="divider"></div>
+
+                {{-- Responsable --}}
+                <h3 class="font-semibold text-base mb-3">Responsable</h3>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                    <div class="form-control">
+                        <label class="label"><span class="label-text">Nombre *</span></label>
+                        <input type="text" name="RESPONSABLE_NOMBRE"
+                            :value="responsable.nombre"
+                            class="input input-bordered @error('RESPONSABLE_NOMBRE') input-error @enderror" />
+                        @error('RESPONSABLE_NOMBRE')<p class="text-error text-sm mt-1">{{ $message }}</p>@enderror
+                    </div>
+                    <div class="form-control">
+                        <label class="label"><span class="label-text">Correo</span></label>
+                        <input type="email" name="RESPONSABLE_CORREO"
+                            :value="responsable.correo"
+                            class="input input-bordered" />
+                    </div>
+                    <div class="form-control">
+                        <label class="label"><span class="label-text">Teléfono</span></label>
+                        <input type="text" name="RESPONSABLE_TELEFONO"
+                            :value="responsable.telefono"
+                            class="input input-bordered" />
+                    </div>
+                    <div class="form-control">
+                        <label class="label"><span class="label-text">Celular</span></label>
+                        <input type="text" name="RESPONSABLE_CELULAR"
+                            :value="responsable.celular"
+                            class="input input-bordered" />
+                    </div>
+                </div>
+
+                <div class="divider"></div>
+
+                {{-- Logística --}}
+                <h3 class="font-semibold text-base mb-3">Logística</h3>
+
+                <div class="form-control mb-4">
+                    <label class="label"><span class="label-text">Dirección de envío</span></label>
+                    <textarea name="DIRECCION_ENVIO" rows="3"
+                        class="textarea textarea-bordered w-full">{{ old('DIRECCION_ENVIO') }}</textarea>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                    <div class="form-control">
+                        <label class="label"><span class="label-text">Sesiones simultáneas</span></label>
+                        <select name="SESIONES_SIMULTANEAS" class="select select-bordered">
+                            <option value="no" {{ old('SESIONES_SIMULTANEAS') === 'no' ? 'selected' : '' }}>No</option>
+                            <option value="si" {{ old('SESIONES_SIMULTANEAS') === 'si' ? 'selected' : '' }}>Sí</option>
+                        </select>
+                    </div>
+                    <div class="form-control">
+                        <label class="label"><span class="label-text">Horario de atención</span></label>
+                        <input type="text" name="HORARIO_DE_ATENCION" value="{{ old('HORARIO_DE_ATENCION') }}"
+                            placeholder="Ej: 9:00 a 18:00 hrs"
+                            class="input input-bordered" />
+                    </div>
+                </div>
+
+                <div class="form-control mb-6">
+                    <label class="label"><span class="label-text">Observaciones</span></label>
+                    <textarea name="OBSERVACIONES" rows="3"
+                        class="textarea textarea-bordered w-full">{{ old('OBSERVACIONES') }}</textarea>
+                </div>
+
+                <div class="flex gap-2">
+                    <button type="submit" class="btn btn-primary">Crear solicitud</button>
+                    <a href="{{ route('admin.solicitudes.index') }}" class="btn btn-ghost">Cancelar</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {{-- Modal nueva empresa --}}
+    <dialog id="modal-nueva-empresa" class="modal">
+        <div class="modal-box max-w-md">
+            <h3 class="font-bold text-lg mb-4">Nueva empresa</h3>
+            <div class="form-control mb-3">
+                <label class="label"><span class="label-text">Nombre *</span></label>
+                <input type="text" id="ne-nombre" class="input input-bordered input-sm" />
+            </div>
+            <div class="form-control mb-3">
+                <label class="label"><span class="label-text">Razón social</span></label>
+                <input type="text" id="ne-razon" class="input input-bordered input-sm" />
+            </div>
+            <div class="form-control mb-4">
+                <label class="label"><span class="label-text">RFC</span></label>
+                <input type="text" id="ne-rfc" class="input input-bordered input-sm" />
+            </div>
+            <div class="modal-action">
+                <button onclick="guardarEmpresa()" class="btn btn-primary btn-sm">Guardar</button>
+                <form method="dialog"><button class="btn btn-ghost btn-sm">Cancelar</button></form>
+            </div>
+        </div>
+        <form method="dialog" class="modal-backdrop"><button>Cerrar</button></form>
+    </dialog>
+
+    {{-- Modal nueva sede --}}
+    <dialog id="modal-nueva-sede" class="modal">
+        <div class="modal-box max-w-md">
+            <h3 class="font-bold text-lg mb-4">Nueva sede</h3>
+            <div class="form-control mb-3">
+                <label class="label"><span class="label-text">Nombre *</span></label>
+                <input type="text" id="ns-nombre" class="input input-bordered input-sm" />
+            </div>
+            <div class="grid grid-cols-2 gap-3 mb-3">
+                <div class="form-control">
+                    <label class="label"><span class="label-text">Calle y número</span></label>
+                    <input type="text" id="ns-calle" class="input input-bordered input-sm" />
+                </div>
+                <div class="form-control">
+                    <label class="label"><span class="label-text">Colonia</span></label>
+                    <input type="text" id="ns-colonia" class="input input-bordered input-sm" />
+                </div>
+                <div class="form-control">
+                    <label class="label"><span class="label-text">Alcaldía / Municipio</span></label>
+                    <input type="text" id="ns-alcaldia" class="input input-bordered input-sm" />
+                </div>
+                <div class="form-control">
+                    <label class="label"><span class="label-text">Ciudad</span></label>
+                    <input type="text" id="ns-ciudad" class="input input-bordered input-sm" />
+                </div>
+                <div class="form-control">
+                    <label class="label"><span class="label-text">Estado</span></label>
+                    <input type="text" id="ns-estado" class="input input-bordered input-sm" />
+                </div>
+                <div class="form-control">
+                    <label class="label"><span class="label-text">CP</span></label>
+                    <input type="text" id="ns-cp" class="input input-bordered input-sm" />
+                </div>
+            </div>
+            <div class="modal-action">
+                <button onclick="guardarSede()" class="btn btn-primary btn-sm">Guardar</button>
+                <form method="dialog"><button class="btn btn-ghost btn-sm">Cancelar</button></form>
+            </div>
+        </div>
+        <form method="dialog" class="modal-backdrop"><button>Cerrar</button></form>
+    </dialog>
+
+    {{-- Modal nuevo contacto --}}
+    <dialog id="modal-nuevo-contacto" class="modal">
+        <div class="modal-box max-w-md">
+            <h3 class="font-bold text-lg mb-4">Nuevo contacto</h3>
+            <div class="grid grid-cols-2 gap-3 mb-4">
+                <div class="form-control">
+                    <label class="label"><span class="label-text">Nombre *</span></label>
+                    <input type="text" id="nc-nombre" class="input input-bordered input-sm" />
+                </div>
+                <div class="form-control">
+                    <label class="label"><span class="label-text">Apellidos *</span></label>
+                    <input type="text" id="nc-apellidos" class="input input-bordered input-sm" />
+                </div>
+                <div class="form-control">
+                    <label class="label"><span class="label-text">Teléfono</span></label>
+                    <input type="text" id="nc-telefono" class="input input-bordered input-sm" />
+                </div>
+                <div class="form-control">
+                    <label class="label"><span class="label-text">Correo</span></label>
+                    <input type="email" id="nc-correo" class="input input-bordered input-sm" />
+                </div>
+            </div>
+            <div class="modal-action">
+                <button onclick="guardarContacto()" class="btn btn-primary btn-sm">Guardar</button>
+                <form method="dialog"><button class="btn btn-ghost btn-sm">Cancelar</button></form>
+            </div>
+        </div>
+        <form method="dialog" class="modal-backdrop"><button>Cerrar</button></form>
+    </dialog>
+
+<script>
+    const csrfToken   = '{{ csrf_token() }}';
+    const urlSedes    = '{{ url("admin/solicitudes/empresa") }}';
+    const urlContactos = '{{ url("admin/solicitudes/sede") }}';
+    const urlEmpresas  = '{{ route("admin.empresas.store") }}';
+    const urlSedesStore = '{{ url("admin/empresas") }}';
+
+    function solicitudForm() {
+        return {
+            empresaId: '',
+            sedeId: '',
+            sedes: [],
+            contactos: [],
+            responsable: {
+                nombre: '',
+                correo: '',
+                telefono: '',
+                celular: '',
+            },
+
+            async onEmpresaChange(id) {
+                this.empresaId = id;
+                this.sedes = [];
+                this.contactos = [];
+                this.sedeId = '';
+                this.responsable = { nombre: '', correo: '', telefono: '', celular: '' };
+                if (!id) return;
+                const res = await fetch(`${urlSedes}/${id}/sedes`);
+                this.sedes = await res.json();
+            },
+
+            async onSedeChange(id) {
+                this.sedeId = id;
+                this.contactos = [];
+                this.responsable = { nombre: '', correo: '', telefono: '', celular: '' };
+                if (!id) return;
+                const res = await fetch(`${urlContactos}/${id}/contactos`);
+                this.contactos = await res.json();
+            },
+
+            onContactoChange(id) {
+                const contacto = this.contactos.find(c => c.id == id);
+                if (!contacto) {
+                    this.responsable = { nombre: '', correo: '', telefono: '', celular: '' };
+                    return;
+                }
+                this.responsable = {
+                    nombre:   contacto.nombre + ' ' + contacto.apellidos,
+                    correo:   contacto.correo   ?? '',
+                    telefono: contacto.telefono ?? '',
+                    celular:  '',
+                };
+            },
+        }
+    }
+
+    // Guardar empresa rápida
+    async function guardarEmpresa() {
+        const nombre = document.getElementById('ne-nombre').value.trim();
+        if (!nombre) { alert('El nombre es requerido.'); return; }
+
+        const res = await fetch(urlEmpresas, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+            body: JSON.stringify({
+                nombre,
+                razon_social: document.getElementById('ne-razon').value,
+                rfc: document.getElementById('ne-rfc').value,
+                estado: 'activo',
+            }),
+        });
+
+        if (res.ok) {
+            document.getElementById('modal-nueva-empresa').close();
+            location.reload();
+        }
+    }
+
+    // Guardar sede rápida
+    async function guardarSede() {
+        const empresaId = document.querySelector('[name="ID_EMPRESA"]').value;
+        const nombre = document.getElementById('ns-nombre').value.trim();
+        if (!empresaId || !nombre) { alert('Selecciona una empresa y escribe el nombre.'); return; }
+
+        const res = await fetch(`${urlSedesStore}/${empresaId}/sedes`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+            body: JSON.stringify({
+                nombre,
+                calle_y_numero: document.getElementById('ns-calle').value,
+                colonia_barrio: document.getElementById('ns-colonia').value,
+                alcaldia_municipio: document.getElementById('ns-alcaldia').value,
+                ciudad: document.getElementById('ns-ciudad').value,
+                estado_republica: document.getElementById('ns-estado').value,
+                codigo_postal: document.getElementById('ns-cp').value,
+                estado: 'activo',
+            }),
+        });
+
+        if (res.ok) {
+            document.getElementById('modal-nueva-sede').close();
+            location.reload();
+        }
+    }
+
+    // Guardar contacto rápido
+    async function guardarContacto() {
+        const sedeId = document.querySelector('[name="ID_SEDE"]').value;
+        const nombre = document.getElementById('nc-nombre').value.trim();
+        const apellidos = document.getElementById('nc-apellidos').value.trim();
+        if (!sedeId || !nombre || !apellidos) { alert('Selecciona una sede y completa nombre y apellidos.'); return; }
+
+        const res = await fetch(`{{ url('admin/empresas') }}/${document.querySelector('[name="ID_EMPRESA"]').value}/sedes/${sedeId}/contactos`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+            body: JSON.stringify({
+                nombre,
+                apellidos,
+                telefono: document.getElementById('nc-telefono').value,
+                correo: document.getElementById('nc-correo').value,
+            }),
+        });
+
+        if (res.ok) {
+            document.getElementById('modal-nuevo-contacto').close();
+            location.reload();
+        }
+    }
+</script>
+</x-app-layout>
