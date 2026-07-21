@@ -293,116 +293,184 @@ class AdminSolicitudController extends Controller
         ]);
     }
 
-    // ── AGREGAR ARTÍCULO A EXAMEN ──
+    // ── AGREGAR ARTÍCULOS A EXAMEN (simplificado: ID Item, folio individual o rango) ──
     public function agregarArticulo(Request $request, Solicitud $solicitud, SolicitudExamen $examen)
     {
         if (!$solicitud->isPendiente()) {
-            return response()->json(['error' => 'La solicitud no es editable.'], 403);
+            return response()->json(['message' => 'La solicitud no es editable.'], 403);
         }
 
         $request->validate([
-            'tipo'     => 'required|in:series,granel,nuevo',
-            'ids'      => 'required_if:tipo,series|array',
-            'cantidad' => 'required_if:tipo,granel|integer|min:1',
+            'entradas'   => 'required|array|min:1',
+            'entradas.*' => 'required|string|max:255',
         ]);
 
-        DB::transaction(function () use ($request, $solicitud, $examen) {
-            if ($request->tipo === 'series') {
-                $articulos = Articulo::whereIn('ID_ARTICULO', $request->ids)
-                    ->where('CANTIDAD_ALMACEN', '>', 0)->get();
+        $agregados   = [];
+        $noAgregados = [];
 
-                foreach ($articulos as $articulo) {
-                    SolicitudArticulo::create([
-                        'ID_SOLICITUD'         => $solicitud->ID_SOLICITUD,
-                        'ID_ARTICULO'          => $articulo->ID_ARTICULO,
-                        'ID_EXAMEN'            => $examen->ID,
-                        'FOLIO'                => $articulo->FOLIO,
-                        'SERIE'                => $articulo->SERIE,
-                        'SERIE_NUMERICO'       => $articulo->SERIE_NUMERICO,
-                        'FORMATO'              => $articulo->FORMATO,
-                        'NOMBRE'               => $articulo->NOMBRE,
-                        'CANTIDAD_ENVIADA'     => 1,
-                        'CANTIDAD_A_ALMACEN'   => 0,
-                        'CANTIDAD_A_DESTRUCCION' => 0,
-                        'CANTIDAD_PERDIDOS'    => 0,
-                        'CANTIDAD_COBRAR'      => 0,
-                        'UBICACION_DESTRUCCION' => '',
-                        'RAZON_PERDIDA'        => '',
-                        'PRECIO_VENTA'         => 0,
-                        'NOMBRE_CANDIDATO'     => '',
-                        'ESTADO'               => 'solicitud',
-                    ]);
-                    $articulo->decrement('CANTIDAD_ALMACEN');
-                    $articulo->increment('CANTIDAD_SOLICITUDES');
+        DB::transaction(function () use ($request, $solicitud, $examen, &$agregados, &$noAgregados) {
+            foreach ($request->entradas as $entrada) {
+                $entrada = strtoupper(trim($entrada));
+
+                // Rango: S000000001-S000000010 (ambos lados con S + 9 dígitos)
+                if (preg_match('/^S(\d{9})-S(\d{9})$/', $entrada, $m)) {
+                    $inicio = (int) $m[1];
+                    $fin    = (int) $m[2];
+
+                    if ($fin < $inicio) {
+                        $noAgregados[] = "{$entrada}: el folio final debe ser mayor o igual al inicial.";
+                        continue;
+                    }
+                    if (($fin - $inicio) > 2000) {
+                        $noAgregados[] = "{$entrada}: rango demasiado grande (máx. 2000 folios).";
+                        continue;
+                    }
+
+                    for ($n = $inicio; $n <= $fin; $n++) {
+                        $serie = 'S' . str_pad((string) $n, 9, '0', STR_PAD_LEFT);
+                        $this->agregarPorSerie($serie, $solicitud, $examen, $agregados, $noAgregados);
+                    }
+                    continue;
                 }
 
-            } elseif ($request->tipo === 'granel') {
-                $articulo = Articulo::findOrFail($request->id_articulo);
-                SolicitudArticulo::create([
-                    'ID_SOLICITUD'         => $solicitud->ID_SOLICITUD,
-                    'ID_ARTICULO'          => $articulo->ID_ARTICULO,
-                    'ID_EXAMEN'            => $examen->ID,
-                    'FOLIO'                => $articulo->FOLIO,
-                    'SERIE'                => '',
-                    'SERIE_NUMERICO'       => '',
-                    'FORMATO'              => $articulo->FORMATO,
-                    'NOMBRE'               => $articulo->NOMBRE,
-                    'CANTIDAD_ENVIADA'     => $request->cantidad,
-                    'CANTIDAD_A_ALMACEN'   => 0,
-                    'CANTIDAD_A_DESTRUCCION' => 0,
-                    'CANTIDAD_PERDIDOS'    => 0,
-                    'CANTIDAD_COBRAR'      => 0,
-                    'UBICACION_DESTRUCCION' => '',
-                    'RAZON_PERDIDA'        => '',
-                    'PRECIO_VENTA'         => 0,
-                    'NOMBRE_CANDIDATO'     => '',
-                    'ESTADO'               => 'solicitud',
-                ]);
-                $articulo->decrement('CANTIDAD_ALMACEN', $request->cantidad);
-                $articulo->increment('CANTIDAD_SOLICITUDES', $request->cantidad);
+                // Folio individual: S000000001 o S000000001-8 (dígito verificador)
+                if (preg_match('/^S(\d{9})(?:-\d+)?$/', $entrada)) {
+                    $this->agregarPorSerie($entrada, $solicitud, $examen, $agregados, $noAgregados);
+                    continue;
+                }
 
-            } elseif ($request->tipo === 'nuevo') {
-                $cantidad = $request->filled('serie') ? 1 : ($request->cantidad ?? 1);
-                $articulo = Articulo::create([
-                    'FOLIO'                => strtoupper($request->folio),
-                    'SERIE'                => strtoupper($request->serie ?? ''),
-                    'SERIE_NUMERICO'       => $request->serie_numerico ?? '',
-                    'NOMBRE'               => $request->nombre,
-                    'DESCRIPCION'          => $request->descripcion ?? '',
-                    'FORMATO'              => strtoupper($request->formato ?? ''),
-                    'COSTO_UNITARIO'       => $request->costo_unitario ?? 0,
-                    'PRECIO_VENTA'         => 0,
-                    'CANTIDAD_ALMACEN'     => 0,
-                    'CANTIDAD_SOLICITUDES' => $cantidad,
-                    'CANTIDAD_DESTRUCCION' => 0,
-                    'CANTIDAD_PERDIDOS'    => 0,
-                    'UBICACION_UNICA'      => 'almacen',
-                    'TIPO'                 => $request->tipo_articulo ?? 'fisico',
-                ]);
-                SolicitudArticulo::create([
-                    'ID_SOLICITUD'         => $solicitud->ID_SOLICITUD,
-                    'ID_ARTICULO'          => $articulo->ID_ARTICULO,
-                    'ID_EXAMEN'            => $examen->ID,
-                    'FOLIO'                => $articulo->FOLIO,
-                    'SERIE'                => $articulo->SERIE,
-                    'SERIE_NUMERICO'       => $articulo->SERIE_NUMERICO,
-                    'FORMATO'              => $articulo->FORMATO,
-                    'NOMBRE'               => $articulo->NOMBRE,
-                    'CANTIDAD_ENVIADA'     => $cantidad,
-                    'CANTIDAD_A_ALMACEN'   => 0,
-                    'CANTIDAD_A_DESTRUCCION' => 0,
-                    'CANTIDAD_PERDIDOS'    => 0,
-                    'CANTIDAD_COBRAR'      => 0,
-                    'UBICACION_DESTRUCCION' => '',
-                    'RAZON_PERDIDA'        => '',
-                    'PRECIO_VENTA'         => 0,
-                    'NOMBRE_CANDIDATO'     => '',
-                    'ESTADO'               => 'solicitud',
-                ]);
+                // Si no matchea patrón de folio, se trata como ID Item (opcionalmente con :cantidad)
+                $cantidadSolicitada = null;
+                $idItemEntrada = $entrada;
+
+                if (str_contains($entrada, ':')) {
+                    [$idItemEntrada, $cantidadTexto] = array_map('trim', explode(':', $entrada, 2));
+
+                    if (!ctype_digit($cantidadTexto) || (int) $cantidadTexto < 1) {
+                        $noAgregados[] = "{$entrada}: la cantidad indicada no es válida.";
+                        continue;
+                    }
+                    $cantidadSolicitada = (int) $cantidadTexto;
+                }
+
+                $this->agregarPorIdItem($idItemEntrada, $solicitud, $examen, $agregados, $noAgregados, $cantidadSolicitada);
             }
         });
 
-        return response()->json(['success' => true]);
+        if (empty($agregados) && !empty($noAgregados)) {
+            return response()->json(['success' => false, 'message' => 'No se pudo agregar ningún artículo.', 'no_agregados' => $noAgregados], 422);
+        }
+
+        return response()->json(['success' => true, 'agregados' => $agregados, 'no_agregados' => $noAgregados]);
+    }
+
+    private function agregarPorSerie(string $serie, Solicitud $solicitud, SolicitudExamen $examen, array &$agregados, array &$noAgregados): void
+    {
+        $articulo = Articulo::where('SERIE', $serie)->first();
+
+        if (!$articulo) {
+            $noAgregados[] = "{$serie}: no existe en inventario.";
+            return;
+        }
+        if ($articulo->CANTIDAD_ALMACEN < 1) {
+            $noAgregados[] = "{$serie}: sin existencia en almacén.";
+            return;
+        }
+
+        SolicitudArticulo::create([
+            'ID_SOLICITUD'          => $solicitud->ID_SOLICITUD,
+            'ID_ARTICULO'           => $articulo->ID_ARTICULO,
+            'ID_EXAMEN'             => $examen->ID,
+            'FOLIO'                 => $articulo->FOLIO,
+            'SERIE'                 => $articulo->SERIE,
+            'SERIE_NUMERICO'        => $articulo->SERIE_NUMERICO,
+            'FORMATO'               => $articulo->FORMATO,
+            'NOMBRE'                => $articulo->NOMBRE,
+            'CANTIDAD_ENVIADA'      => 1,
+            'CANTIDAD_A_ALMACEN'    => 0,
+            'CANTIDAD_A_DESTRUCCION' => 0,
+            'CANTIDAD_PERDIDOS'     => 0,
+            'CANTIDAD_COBRAR'       => 0,
+            'UBICACION_DESTRUCCION' => '',
+            'RAZON_PERDIDA'         => '',
+            'PRECIO_VENTA'          => 0,
+            'NOMBRE_CANDIDATO'      => '',
+            'ESTADO'                => 'solicitud',
+        ]);
+        $articulo->decrement('CANTIDAD_ALMACEN');
+        $articulo->increment('CANTIDAD_SOLICITUDES');
+
+        $agregados[] = $serie;
+    }
+
+    private function agregarPorIdItem(string $idItem, Solicitud $solicitud, SolicitudExamen $examen, array &$agregados, array &$noAgregados, ?int $cantidadSolicitada = null): void
+    {
+        $articulos = Articulo::where('FOLIO', $idItem)->get();
+
+        if ($articulos->isEmpty()) {
+            $noAgregados[] = "{$idItem}: ID Item no existe en inventario.";
+            return;
+        }
+
+        $tieneSerie = $articulos->first()->tieneSerie();
+
+        if ($tieneSerie) {
+            if ($cantidadSolicitada !== null) {
+                $noAgregados[] = "{$idItem}: este ID Item maneja folios individuales, no admite cantidad.";
+                return;
+            }
+
+            $disponibles = $articulos->where('CANTIDAD_ALMACEN', '>', 0);
+
+            if ($disponibles->isEmpty()) {
+                $noAgregados[] = "{$idItem}: sin folios disponibles en almacén.";
+                return;
+            }
+
+            foreach ($disponibles as $articulo) {
+                $this->agregarPorSerie($articulo->SERIE, $solicitud, $examen, $agregados, $noAgregados);
+            }
+            return;
+        }
+
+        // A granel
+        $articulo = $articulos->first();
+        $cantidad = $cantidadSolicitada ?? $articulo->CANTIDAD_ALMACEN;
+
+        if ($articulo->CANTIDAD_ALMACEN < 1) {
+            $noAgregados[] = "{$idItem}: sin existencia en almacén.";
+            return;
+        }
+        if ($cantidad > $articulo->CANTIDAD_ALMACEN) {
+            $noAgregados[] = "{$idItem}: solicitaste {$cantidad}, solo hay {$articulo->CANTIDAD_ALMACEN} en almacén.";
+            return;
+        }
+
+        SolicitudArticulo::create([
+            'ID_SOLICITUD'          => $solicitud->ID_SOLICITUD,
+            'ID_ARTICULO'           => $articulo->ID_ARTICULO,
+            'ID_EXAMEN'             => $examen->ID,
+            'FOLIO'                 => $articulo->FOLIO,
+            'SERIE'                 => '',
+            'SERIE_NUMERICO'        => '',
+            'FORMATO'               => $articulo->FORMATO,
+            'NOMBRE'                => $articulo->NOMBRE,
+            'CANTIDAD_ENVIADA'      => $cantidad,
+            'CANTIDAD_A_ALMACEN'    => 0,
+            'CANTIDAD_A_DESTRUCCION' => 0,
+            'CANTIDAD_PERDIDOS'     => 0,
+            'CANTIDAD_COBRAR'       => 0,
+            'UBICACION_DESTRUCCION' => '',
+            'RAZON_PERDIDA'         => '',
+            'PRECIO_VENTA'          => 0,
+            'NOMBRE_CANDIDATO'      => '',
+            'ESTADO'                => 'solicitud',
+        ]);
+
+        $articulo->decrement('CANTIDAD_ALMACEN', $cantidad);
+        $articulo->increment('CANTIDAD_SOLICITUDES', $cantidad);
+
+        $agregados[] = "{$idItem} (x{$cantidad})";
     }
 
     // ── ELIMINAR ARTÍCULO DE SOLICITUD ──

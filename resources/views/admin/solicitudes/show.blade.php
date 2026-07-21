@@ -19,7 +19,7 @@
                 @endif
                 <a href="{{ route('admin.solicitudes.pdf', $solicitud) }}" class="btn btn-outline btn-sm gap-1" target="_blank">
                     <x-heroicon-o-document-arrow-down class="w-4 h-4" />
-                    PDF
+                    Carta de envío
                 </a>
                 <button onclick="document.getElementById('modal-email').showModal()" class="btn btn-outline btn-sm gap-1">
                     <x-heroicon-o-envelope class="w-4 h-4" />
@@ -27,7 +27,7 @@
                 </button>
                 <button onclick="document.getElementById('modal-factura').showModal()" class="btn btn-outline btn-sm gap-1">
                     <x-heroicon-o-document-text class="w-4 h-4" />
-                    Factura
+                    Facturación
                 </button>
                 @if($solicitud->ESTADO_FACTURA === 'facturada')
                     <button onclick="document.getElementById('modal-cobranza').showModal()" class="btn btn-outline btn-sm gap-1">
@@ -54,7 +54,7 @@
         @endif
         <a href="{{ route('admin.solicitudes.pdf', $solicitud) }}" class="btn btn-outline btn-sm gap-1 shrink-0" target="_blank">
             <x-heroicon-o-document-arrow-down class="w-4 h-4" />
-            PDF
+            Carta de envío
         </a>
         <button onclick="document.getElementById('modal-email').showModal()" class="btn btn-outline btn-sm gap-1 shrink-0">
             <x-heroicon-o-envelope class="w-4 h-4" />
@@ -62,7 +62,7 @@
         </button>
         <button onclick="document.getElementById('modal-factura').showModal()" class="btn btn-outline btn-sm gap-1 shrink-0">
             <x-heroicon-o-document-text class="w-4 h-4" />
-            Factura
+            Facturación
         </button>
         @if($solicitud->ESTADO_FACTURA === 'facturada')
             <button onclick="document.getElementById('modal-cobranza').showModal()" class="btn btn-outline btn-sm gap-1 shrink-0">
@@ -160,34 +160,34 @@
                     {{-- Progreso de estado --}}
                     <div>
                         <p class="text-xs text-base-content/40 uppercase tracking-wide mb-2">Estado solicitud</p>
-                        @php $estado = $solicitud->ESTADO_SOLICITUD; @endphp
+                        @php
+                            $estado = $solicitud->ESTADO_SOLICITUD;
+                            $facturada = $solicitud->ESTADO_FACTURA === 'facturada';
+                            $cobrada   = $facturada && $solicitud->saldoPendiente() <= 0;
+
+                            $pasos = [
+                                ['label' => 'Pendiente',   'activo' => true,                              'completo' => in_array($estado, ['enviada','retornada'])],
+                                ['label' => 'Enviada',     'activo' => $estado === 'enviada',              'completo' => $estado === 'retornada'],
+                                ['label' => 'Retorno',     'activo' => $estado === 'retornada',            'completo' => $facturada],
+                                ['label' => 'Facturación', 'activo' => $facturada && !$cobrada,            'completo' => $cobrada],
+                                ['label' => 'Cobranza',    'activo' => $cobrada,                           'completo' => $cobrada],
+                            ];
+                        @endphp
                         <div class="flex items-center">
-                            <div class="flex flex-col items-center gap-1">
-                                <div class="w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center
-                                    {{ in_array($estado, ['pendiente','enviada','retornada']) ? 'bg-primary border-primary' : 'border-base-300' }}">
-                                    @if(in_array($estado, ['enviada','retornada']))
-                                        <x-heroicon-s-check class="w-2 h-2 text-primary-content" />
-                                    @endif
+                            @foreach($pasos as $i => $paso)
+                                <div class="flex flex-col items-center gap-1">
+                                    <div class="w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center
+                                        {{ ($paso['completo'] || $paso['activo']) ? 'bg-primary border-primary' : 'border-base-300' }}">
+                                        @if($paso['completo'])
+                                            <x-heroicon-s-check class="w-2 h-2 text-primary-content" />
+                                        @endif
+                                    </div>
+                                    <span class="text-[11px] whitespace-nowrap {{ $paso['activo'] ? 'text-primary font-medium' : 'text-base-content/40' }}">{{ $paso['label'] }}</span>
                                 </div>
-                                <span class="text-xs {{ $estado === 'pendiente' ? 'text-primary font-medium' : 'text-base-content/40' }}">Pendiente</span>
-                            </div>
-                            <div class="flex-1 h-0.5 mb-4 mx-1 {{ in_array($estado, ['enviada','retornada']) ? 'bg-primary' : 'bg-base-300' }}"></div>
-                            <div class="flex flex-col items-center gap-1">
-                                <div class="w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center
-                                    {{ in_array($estado, ['enviada','retornada']) ? 'bg-primary border-primary' : 'border-base-300' }}">
-                                    @if($estado === 'retornada')
-                                        <x-heroicon-s-check class="w-2 h-2 text-primary-content" />
-                                    @endif
-                                </div>
-                                <span class="text-xs {{ $estado === 'enviada' ? 'text-primary font-medium' : 'text-base-content/40' }}">Enviada</span>
-                            </div>
-                            <div class="flex-1 h-0.5 mb-4 mx-1 {{ $estado === 'retornada' ? 'bg-primary' : 'bg-base-300' }}"></div>
-                            <div class="flex flex-col items-center gap-1">
-                                <div class="w-3.5 h-3.5 rounded-full border-2
-                                    {{ $estado === 'retornada' ? 'bg-primary border-primary' : 'border-base-300' }}">
-                                </div>
-                                <span class="text-xs {{ $estado === 'retornada' ? 'text-primary font-medium' : 'text-base-content/40' }}">Retornada</span>
-                            </div>
+                                @if(!$loop->last)
+                                    <div class="flex-1 h-0.5 mb-4 mx-1 {{ $paso['completo'] ? 'bg-primary' : 'bg-base-300' }}"></div>
+                                @endif
+                            @endforeach
                         </div>
                     </div>
 

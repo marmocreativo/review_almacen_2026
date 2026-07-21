@@ -68,6 +68,23 @@
                 >
             </div>
 
+            <div class="form-control">
+                <label class="label" for="rol">
+                    <span class="label-text">Rol *</span>
+                </label>
+                <select id="rol" name="rol" class="select select-bordered w-full @error('rol') select-error @enderror">
+                    <option value="">Selecciona un rol...</option>
+                    @foreach($roles as $role)
+                        <option value="{{ $role->id }}" {{ old('rol') == $role->id ? 'selected' : '' }}>
+                            {{ ucfirst($role->rol) }}
+                        </option>
+                    @endforeach
+                </select>
+                @error('rol')
+                    <span class="text-error text-sm mt-1">{{ $message }}</span>
+                @enderror
+            </div>
+
             <div class="flex items-center gap-3 pt-2">
                 <button type="submit" class="btn btn-primary">
                     Crear usuario

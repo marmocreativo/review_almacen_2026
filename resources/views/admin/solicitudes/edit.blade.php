@@ -567,34 +567,35 @@
     {{-- ===================== MODAL ARTÍCULOS ===================== --}}
     <dialog id="modal-articulos" class="modal">
         <div class="modal-box w-11/12 max-w-2xl">
-            <h3 class="font-bold text-lg mb-4">Agregar artículo al examen</h3>
+            <h3 class="font-bold text-lg mb-1">Agregar artículos al examen</h3>
+            <p class="text-sm text-base-content/50 mb-4">
+                Escribe ID Item, folios individuales, o rangos de folio (ej. <span class="font-mono">S451232154-S451232160</span>). Para artículos a granel puedes indicar cantidad con <span class="font-mono">ID_ITEM:cantidad</span> (si la omites, se agrega todo el disponible). Separa varios con coma o salto de línea.
+            </p>
 
-            <div class="flex gap-4 mb-4">
-                <label class="flex items-center gap-2 cursor-pointer">
-                    <input type="radio" name="tipo_busqueda_sol" value="folio" checked
-                        class="radio radio-sm" onchange="tipoBusquedaSol='folio'" />
-                    <span class="text-sm">Por Folio</span>
-                </label>
-                <label class="flex items-center gap-2 cursor-pointer">
-                    <input type="radio" name="tipo_busqueda_sol" value="serie"
-                        class="radio radio-sm" onchange="tipoBusquedaSol='serie'" />
-                    <span class="text-sm">Por Serie</span>
-                </label>
-            </div>
+            <textarea id="sol-input-articulos" rows="5"
+                placeholder="Ej:&#10;CUA-TOEIC-B&#10;PZ-AUDIO-USB:5&#10;S451232154&#10;S451232160-S451232180"
+                class="textarea textarea-bordered w-full font-mono text-sm"></textarea>
 
-            <div class="flex gap-2 mb-4">
-                <input type="text" id="sol-input-busqueda" placeholder="Escribe folio o serie..."
-                    class="input input-bordered input-sm flex-1" />
-                <button onclick="buscarArticuloSol()" class="btn btn-primary btn-sm gap-1">
-                    <x-heroicon-o-magnifying-glass class="w-4 h-4" />
-                    Buscar
-                </button>
-            </div>
-
-            <div id="sol-resultado"></div>
+            <div id="sol-error" class="alert alert-error text-sm mt-3 hidden"></div>
 
             <div class="modal-action">
+                <button onclick="solAgregarArticulos()" id="btn-agregar-articulos" class="btn btn-primary gap-1">
+                    <x-heroicon-o-plus class="w-4 h-4" />
+                    Agregar
+                </button>
                 <form method="dialog"><button class="btn btn-ghost btn-sm">Cerrar</button></form>
+            </div>
+        </div>
+        <form method="dialog" class="modal-backdrop"><button>Cerrar</button></form>
+    </dialog>
+
+    {{-- ===================== MODAL INFORME ARTÍCULOS ===================== --}}
+    <dialog id="modal-informe-articulos" class="modal">
+        <div class="modal-box w-11/12 max-w-lg">
+            <h3 class="font-bold text-lg mb-4">Resultado</h3>
+            <div id="informe-articulos-contenido" class="space-y-3 text-sm"></div>
+            <div class="modal-action mt-4">
+                <button onclick="location.reload()" class="btn btn-primary">Aceptar</button>
             </div>
         </div>
         <form method="dialog" class="modal-backdrop"><button>Cerrar</button></form>
@@ -746,102 +747,59 @@
 
     function abrirModalArticulo(examenId) {
         examenActualId = examenId;
-        document.getElementById('sol-resultado').innerHTML = '';
-        document.getElementById('sol-input-busqueda').value = '';
+        document.getElementById('sol-input-articulos').value = '';
+        document.getElementById('sol-error').classList.add('hidden');
         document.getElementById('modal-articulos').showModal();
     }
 
-    async function buscarArticuloSol() {
-        const busqueda = document.getElementById('sol-input-busqueda').value.trim();
-        if (!busqueda) return;
-        const tipo = document.querySelector('input[name="tipo_busqueda_sol"]:checked').value;
-        const res  = await fetch(urlBuscarArt, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
-            body: JSON.stringify({ busqueda, tipo_busqueda: tipo }),
-        });
-        const data = await res.json();
-        const cont = document.getElementById('sol-resultado');
-        window._solData = data;
+    async function solAgregarArticulos() {
+        const texto = document.getElementById('sol-input-articulos').value.trim();
+        const errorEl = document.getElementById('sol-error');
+        errorEl.classList.add('hidden');
 
-        switch (data.tipo) {
-            case 'serie_encontrada':
-                if (data.articulo.CANTIDAD_ALMACEN < 1) {
-                    cont.innerHTML = `<div class="alert alert-warning"><span>La serie <strong>${data.articulo.SERIE}</strong> no tiene existencia en almacén.</span></div>`;
-                } else {
-                    cont.innerHTML = `<div class="alert alert-info"><span>Serie <strong>${data.articulo.SERIE}</strong> — ${data.articulo.NOMBRE} / Almacén: ${data.articulo.CANTIDAD_ALMACEN}</span></div>
-                    <button onclick="solAgregarSeries([${data.articulo.ID_ARTICULO}])" class="btn btn-primary btn-sm mt-2 gap-1"><x-heroicon-o-plus class="w-4 h-4" />Agregar</button>`;
-                }
-                break;
-            case 'serie_nueva':
-                cont.innerHTML = `<div class="alert alert-warning"><span>La serie <strong>${data.serie}</strong> no existe.</span></div>`;
-                break;
-            case 'folio_con_series':
-                if (!data.disponibles.length) {
-                    cont.innerHTML = `<div class="alert alert-warning"><span>No hay series disponibles en almacén para el folio <strong>${data.folio}</strong>.</span></div>`;
-                } else {
-                    const filas = data.disponibles.map(a => `
-                        <tr>
-                            <td><input type="checkbox" class="checkbox checkbox-sm sol-check-serie" value="${a.ID_ARTICULO}" checked /></td>
-                            <td class="font-mono text-sm">${a.SERIE}</td>
-                            <td class="text-center">${a.CANTIDAD_ALMACEN}</td>
-                        </tr>`).join('');
-                    cont.innerHTML = `<div class="alert alert-info mb-3"><span>${data.disponibles.length} series disponibles de ${data.total} totales.</span></div>
-                    <div class="overflow-x-auto max-h-48 overflow-y-auto mb-3">
-                        <table class="table table-sm">
-                            <thead><tr>
-                                <th><input type="checkbox" class="checkbox checkbox-sm" onchange="document.querySelectorAll('.sol-check-serie').forEach(c=>c.checked=this.checked)" checked /></th>
-                                <th>Serie</th><th>Almacén</th>
-                            </tr></thead>
-                            <tbody>${filas}</tbody>
-                        </table>
-                    </div>
-                    <button onclick="solAgregarSeleccionadas()" class="btn btn-primary btn-sm gap-1"><x-heroicon-o-plus class="w-4 h-4" />Agregar seleccionadas</button>`;
-                }
-                break;
-            case 'folio_granel':
-                cont.innerHTML = `<div class="alert alert-info mb-3"><span>Folio <strong>${data.folio}</strong> — ${data.articulo.NOMBRE} / Almacén: <strong>${data.articulo.CANTIDAD_ALMACEN}</strong></span></div>
-                <div class="flex items-end gap-3">
-                    <div class="form-control">
-                        <label class="label"><span class="label-text text-xs">Cantidad</span></label>
-                        <input type="number" id="sol-cantidad-granel" value="1" min="1" max="${data.articulo.CANTIDAD_ALMACEN}" class="input input-bordered input-sm w-28" />
-                    </div>
-                    <button onclick="solAgregarGranel(${data.articulo.ID_ARTICULO})" class="btn btn-primary btn-sm">Agregar</button>
-                </div>`;
-                break;
-            case 'folio_nuevo':
-                cont.innerHTML = `<div class="alert alert-warning"><span>El folio <strong>${data.folio}</strong> no existe.</span></div>`;
-                break;
+        if (!texto) {
+            errorEl.textContent = 'Escribe al menos un ID Item, folio o rango.';
+            errorEl.classList.remove('hidden');
+            return;
         }
-    }
 
-    async function solAgregarSeleccionadas() {
-        const ids = [...document.querySelectorAll('.sol-check-serie:checked')].map(c => parseInt(c.value));
-        if (!ids.length) { alert('Selecciona al menos una serie.'); return; }
-        await solAgregarSeries(ids);
-    }
+        // Separar por coma o salto de línea
+        const entradas = texto.split(/[\n,]/).map(s => s.trim()).filter(Boolean);
 
-    async function solAgregarSeries(ids) {
-        const res  = await fetch(`${urlAgregarArt}/${examenActualId}/articulos`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
-            body: JSON.stringify({ tipo: 'series', ids }),
-        });
-        const data = await res.json();
-        if (data.success) { document.getElementById('modal-articulos').close(); location.reload(); }
-        else { alert(data.error ?? 'Error.'); }
-    }
+        const btn = document.getElementById('btn-agregar-articulos');
+        const textoOriginal = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = `<span class="loading loading-spinner loading-xs"></span> Agregando...`;
 
-    async function solAgregarGranel(idArticulo) {
-        const cantidad = parseInt(document.getElementById('sol-cantidad-granel').value);
-        const res  = await fetch(`${urlAgregarArt}/${examenActualId}/articulos`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
-            body: JSON.stringify({ tipo: 'granel', id_articulo: idArticulo, cantidad }),
-        });
-        const data = await res.json();
-        if (data.success) { document.getElementById('modal-articulos').close(); location.reload(); }
-        else { alert(data.error ?? 'Error.'); }
+        try {
+            const res = await fetch(`${urlAgregarArt}/${examenActualId}/articulos`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+                body: JSON.stringify({ entradas }),
+            });
+            const data = await res.json().catch(() => ({}));
+
+            if (!res.ok || !data.success) {
+                errorEl.textContent = data.message ?? 'Error al procesar la solicitud.';
+                errorEl.classList.remove('hidden');
+                return;
+            }
+
+            document.getElementById('modal-articulos').close();
+
+            const cont = document.getElementById('informe-articulos-contenido');
+            let html = `<div class="alert alert-success"><span>${data.agregados.length} artículo(s) agregado(s) correctamente.</span></div>`;
+            if (data.no_agregados.length) {
+                html += `<div class="alert alert-warning"><div><p class="font-medium mb-1">${data.no_agregados.length} no se pudieron agregar:</p><ul class="text-sm list-disc list-inside">`;
+                data.no_agregados.forEach(msg => html += `<li>${msg}</li>`);
+                html += `</ul></div></div>`;
+            }
+            cont.innerHTML = html;
+            document.getElementById('modal-informe-articulos').showModal();
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = textoOriginal;
+        }
     }
 
     async function eliminarArticulo(id) {
