@@ -1,4 +1,29 @@
 <x-app-layout>
+    @if(!$pinConfigurado)
+        <div class="modal modal-open">
+            <div class="modal-box">
+                <h3 class="font-bold text-lg mb-2">Configura tu PIN de seguridad</h3>
+                <p class="text-sm text-base-content/60 mb-4">
+                    Crea un PIN de 4 a 8 dígitos. Podrás usarlo para iniciar sesión más rápido y para confirmar acciones sensibles, como eliminar registros.
+                </p>
+                <form method="POST" action="{{ route('pin.store') }}">
+                    @csrf
+                    <div class="form-control mb-3">
+                        <label class="label"><span class="label-text">PIN (4 a 8 dígitos)</span></label>
+                        <input type="password" inputmode="numeric" pattern="[0-9]*" name="pin" maxlength="8"
+                            class="input input-bordered w-full @error('pin') input-error @enderror" autofocus />
+                        @error('pin')<p class="text-error text-sm mt-1">{{ $message }}</p>@enderror
+                    </div>
+                    <div class="form-control mb-4">
+                        <label class="label"><span class="label-text">Confirma tu PIN</span></label>
+                        <input type="password" inputmode="numeric" pattern="[0-9]*" name="pin_confirmation" maxlength="8"
+                            class="input input-bordered w-full" />
+                    </div>
+                    <button type="submit" class="btn btn-primary w-full">Guardar PIN</button>
+                </form>
+            </div>
+        </div>
+    @endif
     <x-slot name="header">
         <div class="flex items-center justify-between">
             <h2 class="text-xl font-semibold">Dashboard</h2>

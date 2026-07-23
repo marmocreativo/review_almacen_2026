@@ -118,6 +118,8 @@ class DashboardController extends Controller
         $mesNombre = ucfirst($mesCalendario->translatedFormat('F Y'));
         $mesActual = $mesCalendario->format('Y-m');
 
+        $pinConfigurado = auth()->user()->tienePin();
+
         return view('dashboard', compact(
             'desde', 'hasta', 'diffDias', 'agruparPor',
             'totalAlmacen', 'totalArticulos',
@@ -126,7 +128,8 @@ class DashboardController extends Controller
             'solicitudesPorPeriodo', 'ordenesPorPeriodo',
             'topEmpresas', 'topExamenes',
             'articulosPerdidos', 'articulosDestruccion', 'solicitudesVencidas',
-            'examenesCalendario', 'mesNombre', 'mesActual'
+            'examenesCalendario', 'mesNombre', 'mesActual',
+            'pinConfigurado'
         ));
     }
 

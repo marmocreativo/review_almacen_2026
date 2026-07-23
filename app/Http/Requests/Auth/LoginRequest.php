@@ -42,7 +42,21 @@ class LoginRequest extends FormRequest
     {
         $this->ensureIsNotRateLimited();
 
-        if (! Auth::attempt($this->only('email', 'password'), $this->boolean('remember'))) {
+        $user = \App\Models\User::where('email', $this->input('email'))->first();
+        $credencial = (string) $this->input('password');
+
+        $pareceSerPin = ctype_digit($credencial) && strlen($credencial) >= 4 && strlen($credencial) <= 8;
+
+        $autenticado = false;
+
+        if ($user && $pareceSerPin && $user->tienePin() && $user->verificarPin($credencial)) {
+            \Illuminate\Support\Facades\Auth::login($user, $this->boolean('remember'));
+            $autenticado = true;
+        } elseif (\Illuminate\Support\Facades\Auth::attempt($this->only('email', 'password'), $this->boolean('remember'))) {
+            $autenticado = true;
+        }
+
+        if (! $autenticado) {
             RateLimiter::hit($this->throttleKey());
 
             throw ValidationException::withMessages([

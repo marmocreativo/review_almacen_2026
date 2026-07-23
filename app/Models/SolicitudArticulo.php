@@ -30,6 +30,7 @@ class SolicitudArticulo extends Model
         'PRECIO_VENTA',
         'NOMBRE_CANDIDATO',
         'ESTADO',
+        'ESTADO_DEVOLUCION',
     ];
 
     protected $casts = [
@@ -61,5 +62,10 @@ class SolicitudArticulo extends Model
     public function isRetornado(): bool
     {
         return $this->ESTADO === 'retornado';
+    }
+
+    public function caja()
+    {
+        return $this->belongsTo(Caja::class, 'ID_CAJA', 'ID');
     }
 }

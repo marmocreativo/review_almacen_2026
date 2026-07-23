@@ -71,6 +71,20 @@
                             </select>
                             @error('TIPO')<p class="text-error text-xs mt-1">{{ $message }}</p>@enderror
                         </div>
+                        
+                        {{-- Tipo de examen --}}
+                        <div class="form-control sm:col-span-2">
+                            <label class="label"><span class="label-text">Tipo de examen relacionado</span></label>
+                            <select name="ID_TIPO_EXAMEN" class="select select-bordered @error('ID_TIPO_EXAMEN') select-error @enderror">
+                                <option value="">— Sin relación —</option>
+                                @foreach($tiposExamen as $te)
+                                    <option value="{{ $te->id }}" {{ old('ID_TIPO_EXAMEN', $articulo->ID_TIPO_EXAMEN) == $te->id ? 'selected' : '' }}>
+                                        {{ $te->nombre }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            @error('ID_TIPO_EXAMEN')<p class="text-error text-xs mt-1">{{ $message }}</p>@enderror
+                        </div>
 
                         {{-- Serie --}}
                         <div class="form-control">

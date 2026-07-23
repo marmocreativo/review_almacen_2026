@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Articulo;
+use App\Models\TipoExamen;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
@@ -10,7 +11,9 @@ class AdminArticuloController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Articulo::query();
+        $tiposExamen = TipoExamen::where('estado', 'activo')->orderBy('nombre')->get();
+
+        $query = Articulo::with('tipoExamen');
 
         // Búsqueda simple
         if ($request->filled('q')) {
@@ -30,77 +33,168 @@ class AdminArticuloController extends Controller
             if ($request->filled('serie')) {
                 $query->where('SERIE', 'like', '%' . $request->serie . '%');
             }
-            if ($request->filled('tipo')) {
-                $query->where('TIPO', $request->tipo);
-            }
             if ($request->filled('formato')) {
                 $query->where('FORMATO', 'like', '%' . $request->formato . '%');
             }
         }
 
-        // Siempre ordenar por FOLIO y luego por SERIE_NUMERICO para agrupar bien
-        $query->orderBy('FOLIO', 'asc')->orderBy('SERIE_NUMERICO', 'asc');
-
-        // ── VISTA DETALLADA: todos los folios individuales, sin agrupar ──
-        if ($request->get('vista') === 'detalle') {
-            $paginator = $query->paginate(30)->withQueryString();
-            return view('admin.articulos.index', ['paginator' => $paginator, 'vistaDetalle' => true]);
+        if ($request->filled('tipo')) {
+            $query->where('TIPO', $request->tipo);
+        }
+        if ($request->filled('tipo_examen')) {
+            $query->where('ID_TIPO_EXAMEN', $request->tipo_examen);
         }
 
-        // Traemos todos los que coincidan (sin paginar individualmente)
-        // y agrupamos en PHP por FOLIO
+        // Ordenamiento
+        $ordenables = [
+            'FOLIO'            => 'FOLIO',
+            'NOMBRE'           => 'NOMBRE',
+            'CANTIDAD_ALMACEN' => 'CANTIDAD_ALMACEN',
+            'COSTO_UNITARIO'   => 'COSTO_UNITARIO',
+        ];
+        $ordenarPor = $ordenables[$request->get('orden')] ?? 'FOLIO';
+        $direccion  = $request->get('dir') === 'desc' ? 'desc' : 'asc';
+
+        $query->orderBy($ordenarPor, $direccion);
+        if ($ordenarPor !== 'FOLIO') {
+            $query->orderBy('FOLIO', 'asc');
+        }
+        $query->orderBy('SERIE_NUMERICO', 'asc');
+
+        $vista = $request->get('vista', 'bloques');
+
+        // ── VISTA DETALLE: un renglón por artículo individual ──
+        if ($vista === 'detalle') {
+            $paginator = $query->paginate(30)->withQueryString();
+            return view('admin.articulos.index', [
+                'paginator'   => $paginator,
+                'vista'       => 'detalle',
+                'tiposExamen' => $tiposExamen,
+            ]);
+        }
+
+        // ── VISTA BLOQUES: un renglón por bloque de series consecutivas ──
         $todosLosArticulos = $query->get();
 
-        // Agrupar por FOLIO
-        $grupos = $todosLosArticulos->groupBy('FOLIO')->map(function ($items) {
+        $filas = collect();
+
+        foreach ($todosLosArticulos->groupBy('FOLIO') as $items) {
             $primero    = $items->first();
             $tieneSerie = $primero->tieneSerie();
 
-            // Calcular rangos de series
-            $rangos = [];
-            if ($tieneSerie) {
-                $rangos = $this->calcularRangos($items);
+            $bloques = $tieneSerie
+                ? $this->calcularBloques($items)
+                : [$this->armarBloqueGranel($items)];
+
+            foreach ($bloques as $bloque) {
+                $filas->push(array_merge($bloque, [
+                    'folio'   => $primero->FOLIO,
+                    'nombre'  => $primero->NOMBRE,
+                    'formato' => $primero->FORMATO,
+                    'tipo'    => $primero->TIPO,
+                    'estado'  => Articulo::estadoBadge(
+                        $bloque['cantidad_almacen'],
+                        $bloque['cantidad_solicitudes'],
+                        $bloque['cantidad_destruccion'],
+                        $bloque['cantidad_perdidos']
+                    ),
+                ]));
             }
+        }
 
-            $almacen     = $items->sum('CANTIDAD_ALMACEN');
-            $solicitudes = $items->sum('CANTIDAD_SOLICITUDES');
-            $destruccion = $items->sum('CANTIDAD_DESTRUCCION');
-            $perdidos    = $items->sum('CANTIDAD_PERDIDOS');
-
-            return [
-                'folio'                => $primero->FOLIO,
-                'nombre'               => $primero->NOMBRE,
-                'formato'              => $primero->FORMATO,
-                'tipo'                 => $primero->TIPO,
-                'tiene_serie'          => $tieneSerie,
-                'total'                => $items->count(),
-                'cantidad_almacen'     => $almacen,
-                'cantidad_solicitudes' => $solicitudes,
-                'cantidad_destruccion' => $destruccion,
-                'cantidad_perdidos'    => $perdidos,
-                'estado'               => Articulo::estadoBadge($almacen, $solicitudes, $destruccion, $perdidos),
-                'rangos'               => $rangos,
-                'items'                => $items,
-                'es_deletable_lote'    => $items->every(fn($a) => $a->esDeletable()),
-                'ids_deletables'       => $items->filter(fn($a) => $a->esDeletable())->pluck('ID_ARTICULO')->toArray(),
-            ];
-        });
-
-        // Paginación manual sobre los grupos
-        $porPagina  = 20;
-        $paginaActual = $request->get('page', 1);
-        $total      = $grupos->count();
-        $gruposPaginados = $grupos->slice(($paginaActual - 1) * $porPagina, $porPagina);
+        $porPagina    = 20;
+        $paginaActual = (int) $request->get('page', 1);
+        $total        = $filas->count();
+        $filasPaginadas = $filas->slice(($paginaActual - 1) * $porPagina, $porPagina)->values();
 
         $paginator = new \Illuminate\Pagination\LengthAwarePaginator(
-            $gruposPaginados,
+            $filasPaginadas,
             $total,
             $porPagina,
             $paginaActual,
             ['path' => $request->url(), 'query' => $request->query()]
         );
 
-        return view('admin.articulos.index', ['paginator' => $paginator, 'vistaDetalle' => false]);
+        return view('admin.articulos.index', [
+            'paginator'   => $paginator,
+            'vista'       => 'bloques',
+            'tiposExamen' => $tiposExamen,
+        ]);
+    }
+
+    /**
+     * Agrupa artículos con serie en bloques de números consecutivos por prefijo.
+     * Cada bloque conserva sus items (Eloquent) para poder validar esDeletable() sin requery.
+     */
+    private function calcularBloques($items): array
+    {
+        $porPrefijo = [];
+        foreach ($items as $item) {
+            if (preg_match('/^(.*?)(\d+)$/', $item->SERIE, $m)) {
+                $prefijo  = $m[1];
+                $numerico = (int) $m[2];
+            } else {
+                $prefijo  = $item->SERIE;
+                $numerico = 0;
+            }
+            $porPrefijo[$prefijo][] = ['n' => $numerico, 'item' => $item];
+        }
+
+        $bloques = [];
+        foreach ($porPrefijo as $lista) {
+            usort($lista, fn($a, $b) => $a['n'] <=> $b['n']);
+            $actual = [$lista[0]];
+
+            for ($i = 1; $i < count($lista); $i++) {
+                if ($lista[$i]['n'] === end($actual)['n'] + 1) {
+                    $actual[] = $lista[$i];
+                } else {
+                    $bloques[] = $this->armarBloque($actual);
+                    $actual = [$lista[$i]];
+                }
+            }
+            $bloques[] = $this->armarBloque($actual);
+        }
+
+        return $bloques;
+    }
+
+    private function armarBloque(array $lista): array
+    {
+        $items   = collect($lista)->pluck('item');
+        $primero = $items->first();
+        $ultimo  = $items->last();
+
+        return [
+            'items'                => $items,
+            'ids'                  => $items->pluck('ID_ARTICULO')->toArray(),
+            'rango'                => $primero->SERIE === $ultimo->SERIE ? $primero->SERIE : "{$primero->SERIE}–{$ultimo->SERIE}",
+            'count'                => $items->count(),
+            'cantidad_almacen'     => $items->sum('CANTIDAD_ALMACEN'),
+            'cantidad_solicitudes' => $items->sum('CANTIDAD_SOLICITUDES'),
+            'cantidad_destruccion' => $items->sum('CANTIDAD_DESTRUCCION'),
+            'cantidad_perdidos'    => $items->sum('CANTIDAD_PERDIDOS'),
+            'tipo_examen'          => $primero->tipoExamen?->nombre,
+            'es_deletable_lote'    => $items->every(fn($a) => $a->esDeletable()),
+        ];
+    }
+
+    private function armarBloqueGranel($items): array
+    {
+        $primero = $items->first();
+
+        return [
+            'items'                => $items,
+            'ids'                  => $items->pluck('ID_ARTICULO')->toArray(),
+            'rango'                => 'Granel',
+            'count'                => $items->count(),
+            'cantidad_almacen'     => $items->sum('CANTIDAD_ALMACEN'),
+            'cantidad_solicitudes' => $items->sum('CANTIDAD_SOLICITUDES'),
+            'cantidad_destruccion' => $items->sum('CANTIDAD_DESTRUCCION'),
+            'cantidad_perdidos'    => $items->sum('CANTIDAD_PERDIDOS'),
+            'tipo_examen'          => $primero->tipoExamen?->nombre,
+            'es_deletable_lote'    => $items->every(fn($a) => $a->esDeletable()),
+        ];
     }
     
     /**
@@ -214,6 +308,7 @@ class AdminArticuloController extends Controller
             'COSTO_UNITARIO' => 'nullable|numeric|min:0',
             'PRECIO_VENTA'   => 'nullable|numeric|min:0',
             'CANTIDAD_ALMACEN' => 'nullable|integer|min:1',
+            'ID_TIPO_EXAMEN' => 'nullable|exists:tipo_examenes,id',
         ]);
 
         $serieData = null;
@@ -253,6 +348,7 @@ class AdminArticuloController extends Controller
             'CANTIDAD_PERDIDOS'    => 0,
             'UBICACION_UNICA'  => 'almacen',
             'TIPO'             => $request->TIPO,
+            'ID_TIPO_EXAMEN' => $request->ID_TIPO_EXAMEN,
         ]);
 
         return response()->json(['success' => true, 'id_item' => $idItem]);
@@ -271,6 +367,7 @@ class AdminArticuloController extends Controller
             'PRECIO_VENTA'   => 'nullable|numeric|min:0',
             'SERIE_INICIAL'  => 'required|string|max:255',
             'SERIE_FINAL'    => 'required|string|max:255',
+            'ID_TIPO_EXAMEN' => 'nullable|exists:tipo_examenes,id',
         ]);
 
         $inicial = $this->parsearSerie($request->SERIE_INICIAL);
@@ -322,6 +419,7 @@ class AdminArticuloController extends Controller
                 'CANTIDAD_PERDIDOS'    => 0,
                 'UBICACION_UNICA'      => 'almacen',
                 'TIPO'                 => $request->TIPO,
+                'ID_TIPO_EXAMEN' => $request->ID_TIPO_EXAMEN,
             ]);
 
             $agregados[] = $serie;
@@ -383,7 +481,16 @@ class AdminArticuloController extends Controller
 
     public function edit(Articulo $articulo)
     {
-        return view('admin.articulos.edit', compact('articulo'));
+        $tiposExamen = TipoExamen::where('estado', 'activo')->orderBy('nombre')->get();
+
+        if ($request = request() and $request->wantsJson()) {
+            return response()->json([
+                'articulo'    => $articulo,
+                'tiposExamen' => $tiposExamen,
+            ]);
+        }
+
+        return view('admin.articulos.edit', compact('articulo', 'tiposExamen'));
     }
 
     public function update(Request $request, Articulo $articulo)
@@ -398,6 +505,7 @@ class AdminArticuloController extends Controller
             'PRECIO_VENTA'   => 'nullable|numeric|min:0',
             'SERIE'          => 'nullable|string|max:255',
             'SERIE_NUMERICO' => 'nullable|string|max:255',
+            'ID_TIPO_EXAMEN' => 'nullable|exists:tipo_examenes,id',
         ]);
 
         $articulo->update([
@@ -410,7 +518,12 @@ class AdminArticuloController extends Controller
             'PRECIO_VENTA'   => $request->PRECIO_VENTA ?? 0,
             'SERIE'          => strtoupper($request->SERIE ?? ''),
             'SERIE_NUMERICO' => $request->SERIE_NUMERICO ?? '',
+            'ID_TIPO_EXAMEN' => $request->ID_TIPO_EXAMEN,
         ]);
+
+        if ($request->wantsJson()) {
+            return response()->json(['success' => true]);
+        }
 
         return redirect()->route('admin.articulos.show', $articulo)
             ->with('success', 'Artículo actualizado correctamente.');
@@ -611,5 +724,66 @@ class AdminArticuloController extends Controller
             return ['serie' => $serie, 'numerico' => $m[1]];
         }
         return null;
+    }
+
+    public function editGrupo(Request $request)
+    {
+        $ids = $request->query('ids', []);
+
+        if (!is_array($ids) || empty($ids)) {
+            abort(404);
+        }
+
+        $articulos = Articulo::whereIn('ID_ARTICULO', $ids)->get();
+
+        if ($articulos->isEmpty()) {
+            abort(404);
+        }
+
+        $primero     = $articulos->first();
+        $tiposExamen = TipoExamen::where('estado', 'activo')->orderBy('nombre')->get();
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'primero'     => $primero,
+                'count'       => $articulos->count(),
+                'ids'         => $ids,
+                'tiposExamen' => $tiposExamen,
+            ]);
+        }
+
+        return view('admin.articulos.edit-grupo', compact('articulos', 'primero', 'tiposExamen', 'ids'));
+    }
+
+    public function updateGrupo(Request $request)
+    {
+        $request->validate([
+            'ids'            => 'required|array|min:1',
+            'ids.*'          => 'integer|exists:al_articulos,ID_ARTICULO',
+            'NOMBRE'         => 'required|string|max:255',
+            'DESCRIPCION'    => 'nullable|string',
+            'FORMATO'        => 'nullable|string|max:255',
+            'TIPO'           => 'required|in:fisico,digital',
+            'COSTO_UNITARIO' => 'nullable|numeric|min:0',
+            'PRECIO_VENTA'   => 'nullable|numeric|min:0',
+            'ID_TIPO_EXAMEN' => 'nullable|exists:tipo_examenes,id',
+        ]);
+
+        Articulo::whereIn('ID_ARTICULO', $request->ids)->update([
+            'NOMBRE'         => $request->NOMBRE,
+            'DESCRIPCION'    => $request->DESCRIPCION ?? '',
+            'FORMATO'        => strtoupper($request->FORMATO ?? ''),
+            'TIPO'           => $request->TIPO,
+            'COSTO_UNITARIO' => $request->COSTO_UNITARIO ?? 0,
+            'PRECIO_VENTA'   => $request->PRECIO_VENTA ?? 0,
+            'ID_TIPO_EXAMEN' => $request->ID_TIPO_EXAMEN,
+        ]);
+
+        if ($request->wantsJson()) {
+            return response()->json(['success' => true]);
+        }
+
+        return redirect()->route('admin.articulos.index')
+            ->with('success', count($request->ids) . ' artículos actualizados correctamente.');
     }
 }

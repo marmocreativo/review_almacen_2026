@@ -65,26 +65,18 @@
                                 <td class="text-center font-mono">{{ $solicitud->articulos_count }}</td>
                                 <td>
                                     <span class="badge {{ $esEnviada ? 'badge-info' : 'badge-success' }}">
-                                        {{ $esEnviada ? 'Por retornar' : 'En devolución' }}
+                                        {{ $esEnviada ? 'Por retornar' : 'Devuelta' }}
                                     </span>
                                 </td>
                                 <td>
                                     <div class="flex gap-1 justify-end">
                                         @if($esEnviada)
-                                            <form method="POST" action="{{ route('admin.solicitudes.estado', $solicitud->ID_SOLICITUD) }}">
-                                                @csrf @method('PATCH')
-                                                <input type="hidden" name="estado" value="retornada">
-                                                <button type="submit" class="btn btn-info btn-xs gap-1" title="Marcar como retornada">
-                                                    <x-heroicon-o-arrow-uturn-left class="w-4 h-4" />
-                                                    Marcar retornada
-                                                </button>
-                                            </form>
-                                        @else
-                                            <a href="{{ route('admin.solicitudes.edit', $solicitud->ID_SOLICITUD) }}"
+                                            <a href="{{ route('admin.solicitudes.devolucion.show', $solicitud->ID_SOLICITUD) }}"
                                                 class="btn btn-success btn-xs gap-1" title="Procesar devolución">
                                                 <x-heroicon-o-inbox-arrow-down class="w-4 h-4" />
                                                 Procesar
                                             </a>
+                                            
                                         @endif
                                         <a href="{{ route('admin.solicitudes.show', $solicitud->ID_SOLICITUD) }}"
                                             class="btn btn-outline btn-xs" title="Ver detalle">
@@ -142,6 +134,12 @@
 
                                 <div class="flex gap-2">
                                     @if($esEnviada)
+                                        <a href="{{ route('admin.solicitudes.devolucion.show', $solicitud->ID_SOLICITUD) }}"
+                                            class="btn btn-success btn-sm gap-1 flex-1">
+                                            <x-heroicon-o-inbox-arrow-down class="w-4 h-4" />
+                                            Procesar
+                                        </a>
+                                    @else
                                         <form method="POST" action="{{ route('admin.solicitudes.estado', $solicitud->ID_SOLICITUD) }}" class="flex-1">
                                             @csrf @method('PATCH')
                                             <input type="hidden" name="estado" value="retornada">
@@ -150,12 +148,6 @@
                                                 Marcar retornada
                                             </button>
                                         </form>
-                                    @else
-                                        <a href="{{ route('admin.solicitudes.edit', $solicitud->ID_SOLICITUD) }}"
-                                            class="btn btn-success btn-sm gap-1 flex-1">
-                                            <x-heroicon-o-inbox-arrow-down class="w-4 h-4" />
-                                            Procesar
-                                        </a>
                                     @endif
                                     <a href="{{ route('admin.solicitudes.show', $solicitud->ID_SOLICITUD) }}"
                                         class="btn btn-outline btn-sm">

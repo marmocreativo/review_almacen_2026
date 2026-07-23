@@ -12,6 +12,8 @@ use App\Http\Controllers\AdminDestruccionController;
 use App\Http\Controllers\AdminImportacionController;
 use App\Http\Controllers\AdminUsuarioController;
 use App\Http\Controllers\AdminRolController;
+use App\Http\Controllers\PinController;
+use App\Http\Controllers\PortalSolicitudController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -31,6 +33,9 @@ Route::middleware('auth')->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
+    Route::post('/pin', [PinController::class, 'store'])->name('pin.store');
+    Route::post('/pin/verificar', [PinController::class, 'verificar'])->name('pin.verificar');
+
     Route::prefix('admin')->name('admin.')->group(function () {
 
         Route::resource('roles', AdminRolController::class);
@@ -41,13 +46,16 @@ Route::middleware('auth')->group(function () {
         Route::get('usuarios/{user}/edit', [AdminUsuarioController::class, 'edit'])->name('usuarios.edit');
         Route::patch('usuarios/{user}', [AdminUsuarioController::class, 'update'])->name('usuarios.update');
         Route::delete('usuarios/{user}', [AdminUsuarioController::class, 'destroy'])->name('usuarios.destroy');
+        
 
         Route::resource('empresas', AdminEmpresaController::class);
         Route::resource('empresas.sedes', AdminSedeController::class);
-        Route::resource('empresas.sedes.contactos', AdminContactoController::class);
+        Route::resource('empresas.contactos', AdminContactoController::class);
         Route::resource('tipo-examenes', AdminTipoExamenController::class, [
             'parameters' => ['tipo-examenes' => 'tipoExamen']
         ]);
+        Route::post('empresas/{empresa}/contactos/{contacto}/enviar-pin', [AdminContactoController::class, 'enviarPin'])->name('empresas.contactos.enviar-pin');
+
 
         Route::get('articulos', [AdminArticuloController::class, 'index'])->name('articulos.index');
         Route::get('articulos/exportar', [AdminArticuloController::class, 'exportar'])->name('articulos.exportar');
@@ -55,6 +63,8 @@ Route::middleware('auth')->group(function () {
         Route::post('articulos/rango', [AdminArticuloController::class, 'storeRango'])->name('articulos.rango');
         Route::post('articulos/destroy-lote', [AdminArticuloController::class, 'destroyLote'])->name('articulos.destroy-lote');
         Route::post('articulos', [AdminArticuloController::class, 'store'])->name('articulos.store');
+        Route::get('articulos/grupo/editar', [AdminArticuloController::class, 'editGrupo'])->name('articulos.grupo.edit');
+        Route::patch('articulos/grupo', [AdminArticuloController::class, 'updateGrupo'])->name('articulos.grupo.update');
         Route::get('articulos/{articulo}', [AdminArticuloController::class, 'show'])->name('articulos.show');
         Route::get('articulos/{articulo}/edit', [AdminArticuloController::class, 'edit'])->name('articulos.edit');
         Route::put('articulos/{articulo}', [AdminArticuloController::class, 'update'])->name('articulos.update');
@@ -85,28 +95,47 @@ Route::middleware('auth')->group(function () {
         Route::get('envios', [AdminSolicitudController::class, 'indexEnvios'])->name('envios.index')->middleware('permiso:envios');
         Route::get('devoluciones', [AdminSolicitudController::class, 'indexDevoluciones'])->name('devoluciones.index')->middleware('permiso:devoluciones');
         Route::get('facturacion', [AdminSolicitudController::class, 'indexFacturacion'])->name('facturacion.index')->middleware('permiso:facturacion');
+        Route::get('cobranza', [AdminSolicitudController::class, 'indexCobranza'])->name('cobranza.index');
+        Route::get('solicitudes/exportar', [AdminSolicitudController::class, 'exportarSolicitudes'])->name('solicitudes.exportar');
+        Route::get('envios/exportar', [AdminSolicitudController::class, 'exportarEnvios'])->name('envios.exportar');
+        Route::get('facturacion/exportar', [AdminSolicitudController::class, 'exportarFacturacion'])->name('facturacion.exportar');
 
-        // Resource (genera index, create, store, edit, update, destroy)
-        Route::resource('solicitudes', AdminSolicitudController::class, [
-            'parameters' => ['solicitudes' => 'solicitud']
-        ])->except(['show']);
 
-        // Rutas con {solicitud} — van después del resource
-        Route::get('solicitudes/{solicitud}', [AdminSolicitudController::class, 'show'])->name('solicitudes.show');
+        // Resource base (index, create, store, edit*, update*, destroy)
+        Route::get('solicitudes', [AdminSolicitudController::class, 'index'])->name('solicitudes.index');
+        Route::get('solicitudes/crear', [AdminSolicitudController::class, 'create'])->name('solicitudes.create');
+        Route::post('solicitudes', [AdminSolicitudController::class, 'store'])->name('solicitudes.store');
+        Route::delete('solicitudes/{solicitud}', [AdminSolicitudController::class, 'destroy'])->name('solicitudes.destroy');
         Route::patch('solicitudes/{solicitud}/estado', [AdminSolicitudController::class, 'cambiarEstado'])->name('solicitudes.estado');
-        Route::post('solicitudes/{solicitud}/factura', [AdminSolicitudController::class, 'guardarFactura'])->name('solicitudes.factura');
-        Route::get('solicitudes/{solicitud}/pdf', [AdminSolicitudController::class, 'generarPdf'])->name('solicitudes.pdf');
-        Route::post('solicitudes/{solicitud}/email', [AdminSolicitudController::class, 'enviarEmail'])->name('solicitudes.email');
+
+        // ── Pestaña: Datos generales ──
+        Route::get('solicitudes/{solicitud}', [AdminSolicitudController::class, 'showDatos'])->name('solicitudes.show');
+        Route::patch('solicitudes/{solicitud}/datos', [AdminSolicitudController::class, 'updateDatos'])->name('solicitudes.datos.update');
+
+        // ── Pestaña: Envío ──
+        Route::get('solicitudes/{solicitud}/envio', [AdminSolicitudController::class, 'showEnvio'])->name('solicitudes.envio.show');
+        Route::patch('solicitudes/{solicitud}/envio', [AdminSolicitudController::class, 'updateEnvio'])->name('solicitudes.envio.update');
         Route::post('solicitudes/{solicitud}/examenes', [AdminSolicitudController::class, 'agregarExamen'])->name('solicitudes.examenes.store');
         Route::delete('solicitudes/{solicitud}/examenes/{examen}', [AdminSolicitudController::class, 'eliminarExamen'])->name('solicitudes.examenes.destroy');
         Route::post('solicitudes/{solicitud}/examenes/{examen}/articulos', [AdminSolicitudController::class, 'agregarArticulo'])->name('solicitudes.articulos.store');
         Route::delete('solicitudes/{solicitud}/articulos/{articuloSolicitud}', [AdminSolicitudController::class, 'eliminarArticulo'])->name('solicitudes.articulos.destroy');
-        Route::patch('solicitudes/{solicitud}/articulos/{articuloSolicitud}/retornar', [AdminSolicitudController::class, 'retornarArticulo'])->name('solicitudes.articulos.retornar');
+        Route::delete('solicitudes/{solicitud}/articulos-lote', [AdminSolicitudController::class, 'eliminarArticulosLote'])->name('solicitudes.articulos.destroy-lote');
 
-        Route::get('cobranza', [AdminSolicitudController::class, 'indexCobranza'])->name('cobranza.index');
+        // ── Pestaña: Devolución ──
+        Route::get('solicitudes/{solicitud}/devolucion', [AdminSolicitudController::class, 'showDevolucion'])->name('solicitudes.devolucion.show');
+        Route::post('solicitudes/{solicitud}/devolucion/procesar', [AdminSolicitudController::class, 'procesarDevolucion'])->name('solicitudes.devolucion.procesar');
+
+        // ── Pestaña: Facturación ──
+        Route::get('solicitudes/{solicitud}/facturacion', [AdminSolicitudController::class, 'showFacturacion'])->name('solicitudes.facturacion.show');
+        Route::patch('solicitudes/{solicitud}/facturacion', [AdminSolicitudController::class, 'updateFacturacion'])->name('solicitudes.facturacion.update');
+        Route::post('solicitudes/{solicitud}/factura', [AdminSolicitudController::class, 'guardarFactura'])->name('solicitudes.factura');
         Route::patch('solicitudes/{solicitud}/vencimiento-cobranza', [AdminSolicitudController::class, 'guardarVencimiento'])->name('solicitudes.vencimiento-cobranza');
         Route::post('solicitudes/{solicitud}/pagos', [AdminSolicitudController::class, 'agregarPago'])->name('solicitudes.pagos.store');
         Route::delete('solicitudes/{solicitud}/pagos/{pago}', [AdminSolicitudController::class, 'eliminarPago'])->name('solicitudes.pagos.destroy');
+
+        // ── PDF / Email (se mantienen) ──
+        Route::get('solicitudes/{solicitud}/pdf', [AdminSolicitudController::class, 'generarPdf'])->name('solicitudes.pdf');
+        Route::post('solicitudes/{solicitud}/email', [AdminSolicitudController::class, 'enviarEmail'])->name('solicitudes.email');
 
         Route::get('importacion', [AdminImportacionController::class, 'index'])->name('importacion.index');
         Route::get('importacion/plantilla/{tipo}', [AdminImportacionController::class, 'descargarPlantilla'])->name('importacion.plantilla');
@@ -114,9 +143,26 @@ Route::middleware('auth')->group(function () {
         Route::post('importacion/empresas', [AdminImportacionController::class, 'importarEmpresas'])->name('importacion.empresas');
 
         Route::get('destruccion', [AdminDestruccionController::class, 'index'])->name('destruccion.index');
-        Route::get('destruccion/caja', [AdminDestruccionController::class, 'contenidoCaja'])->name('destruccion.caja');
+        Route::get('destruccion/exportar', [AdminDestruccionController::class, 'exportar'])->name('destruccion.exportar');
+        Route::post('destruccion', [AdminDestruccionController::class, 'store'])->name('destruccion.store');
+        Route::get('destruccion/{caja}', [AdminDestruccionController::class, 'contenidoCaja'])->name('destruccion.caja');
+        Route::patch('destruccion/{caja}/cerrar', [AdminDestruccionController::class, 'cerrar'])->name('destruccion.cerrar');
+        Route::patch('destruccion/{caja}/destruida', [AdminDestruccionController::class, 'marcarDestruida'])->name('destruccion.destruida');
+
+
+
        
     });
+});
+
+Route::prefix('portal')->name('portal.')->group(function () {
+    Route::get('/', [PortalSolicitudController::class, 'login'])->name('login');
+    Route::post('/verificar', [PortalSolicitudController::class, 'verificarPin'])->name('verificar');
+    Route::post('/solicitudes', [PortalSolicitudController::class, 'store'])->name('solicitudes.store');
+    Route::get('/solicitudes/{solicitud}/examenes', [PortalSolicitudController::class, 'examenes'])->name('solicitudes.examenes');
+    Route::post('/solicitudes/{solicitud}/examenes', [PortalSolicitudController::class, 'agregarExamen'])->name('solicitudes.examenes.store');
+    Route::delete('/solicitudes/{solicitud}/examenes/{examen}', [PortalSolicitudController::class, 'eliminarExamen'])->name('solicitudes.examenes.destroy');
+    Route::get('/solicitudes/{solicitud}/resumen', [PortalSolicitudController::class, 'resumen'])->name('solicitudes.resumen');
 });
 
 require __DIR__.'/auth.php';

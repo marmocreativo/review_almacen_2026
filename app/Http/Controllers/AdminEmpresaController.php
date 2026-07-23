@@ -38,6 +38,26 @@ class AdminEmpresaController extends Controller
             'rfc'          => 'nullable|string|max:255',
             'logo'         => 'nullable|image|max:2048',
             'estado'       => 'required|in:activo,inactivo',
+            'tipo_cliente' => 'required|in:corporativo,academico,gobierno',
+
+            'nombre_contacto_operativo'    => 'nullable|string|max:255',
+            'apellido_contacto_operativo'  => 'nullable|string|max:255',
+            'telefono_contacto_operativo'  => 'nullable|string|max:20',
+            'email_contacto_operativo'     => 'nullable|email|max:255',
+
+            'nombre_contacto_facturacion'   => 'nullable|string|max:255',
+            'apellido_contacto_facturacion' => 'nullable|string|max:255',
+            'telefono_contacto_facturacion' => 'nullable|string|max:20',
+            'email_contacto_facturacion'    => 'nullable|email|max:255',
+
+            'fecha_de_contrato'  => 'nullable|date',
+            'vigencia_contrato'  => 'nullable|integer|min:1',
+            'dias_de_credito'    => 'nullable|integer|min:0',
+
+            'uso_de_cfdi'            => 'nullable|string|max:255',
+            'direccion_fiscal'       => 'nullable|string',
+            'portal_de_facturacion'  => 'nullable|string|max:255',
+            'notas'                  => 'nullable|string',
         ]);
 
         if ($request->hasFile('logo')) {
@@ -47,13 +67,14 @@ class AdminEmpresaController extends Controller
         Empresa::create($validated);
 
         return redirect()->route('admin.empresas.index')
-            ->with('success', 'Empresa creada correctamente.');
+            ->with('success', 'Cliente creado correctamente.');
     }
 
     public function show(Empresa $empresa)
     {
         $empresa->load([
             'sedes.contactos',
+            'contactos.sedes',
         ]);
 
         $solicitudes = \App\Models\Solicitud::where('ID_EMPRESA', $empresa->id)
@@ -78,6 +99,26 @@ class AdminEmpresaController extends Controller
             'rfc'          => 'nullable|string|max:255',
             'logo'         => 'nullable|image|max:2048',
             'estado'       => 'required|in:activo,inactivo',
+            'tipo_cliente' => 'required|in:corporativo,academico,gobierno',
+
+            'nombre_contacto_operativo'    => 'nullable|string|max:255',
+            'apellido_contacto_operativo'  => 'nullable|string|max:255',
+            'telefono_contacto_operativo'  => 'nullable|string|max:20',
+            'email_contacto_operativo'     => 'nullable|email|max:255',
+
+            'nombre_contacto_facturacion'   => 'nullable|string|max:255',
+            'apellido_contacto_facturacion' => 'nullable|string|max:255',
+            'telefono_contacto_facturacion' => 'nullable|string|max:20',
+            'email_contacto_facturacion'    => 'nullable|email|max:255',
+
+            'fecha_de_contrato'  => 'nullable|date',
+            'vigencia_contrato'  => 'nullable|integer|min:1',
+            'dias_de_credito'    => 'nullable|integer|min:0',
+
+            'uso_de_cfdi'            => 'nullable|string|max:255',
+            'direccion_fiscal'       => 'nullable|string',
+            'portal_de_facturacion'  => 'nullable|string|max:255',
+            'notas'                  => 'nullable|string',
         ]);
 
         if ($request->hasFile('logo')) {

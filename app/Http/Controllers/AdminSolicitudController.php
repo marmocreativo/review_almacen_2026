@@ -11,6 +11,7 @@ use App\Models\SolicitudArticulo;
 use App\Models\SolicitudExamen;
 use App\Models\SolicitudPago;
 use App\Models\TipoExamen;
+use App\Models\Caja;
 use Illuminate\Support\Facades\Storage;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -18,7 +19,6 @@ use Illuminate\Support\Facades\DB;
 
 class AdminSolicitudController extends Controller
 {
-    // ── INDEX ──
     public function index(Request $request)
     {
         $query = Solicitud::with(['empresa', 'sede'])
@@ -27,27 +27,114 @@ class AdminSolicitudController extends Controller
 
         if ($request->filled('busqueda')) {
             $b = $request->busqueda;
-            $query->whereHas('empresa', fn($q) => $q->where('nombre', 'like', "%$b%"))
-                  ->orWhereHas('sede', fn($q) => $q->where('nombre', 'like', "%$b%"));
+            $query->where(function ($q) use ($b) {
+                $q->whereHas('empresa', fn($qq) => $qq->where('nombre', 'like', "%$b%"))
+                ->orWhereHas('sede', fn($qq) => $qq->where('nombre', 'like', "%$b%"));
+            });
+        }
+
+        if ($request->filled('empresa')) {
+            $query->where('ID_EMPRESA', $request->empresa);
         }
 
         if ($request->filled('estado')) {
             $query->where('ESTADO_SOLICITUD', $request->estado);
         }
 
-        $solicitudes = $query->orderBy('FECHA_SOLICITUD', 'desc')->paginate(15)->withQueryString();
+        if ($request->filled('desde')) {
+            $query->whereDate('FECHA_SOLICITUD', '>=', $request->desde);
+        }
+        if ($request->filled('hasta')) {
+            $query->whereDate('FECHA_SOLICITUD', '<=', $request->hasta);
+        }
 
-        return view('admin.solicitudes.index', compact('solicitudes'));
+        $ordenables = [
+            'FECHA_SOLICITUD' => 'FECHA_SOLICITUD',
+            'EMPRESA'          => 'ID_EMPRESA',
+            'ESTADO'           => 'ESTADO_SOLICITUD',
+        ];
+        $ordenarPor = $ordenables[$request->get('orden')] ?? 'FECHA_SOLICITUD';
+        $direccion  = $request->get('dir') === 'asc' ? 'asc' : 'desc';
+
+        $query->orderBy($ordenarPor, $direccion);
+
+        $solicitudes = $query->paginate(15)->withQueryString();
+        $empresas = Empresa::where('estado', 'activo')->orderBy('nombre')->get();
+
+        return view('admin.solicitudes.index', compact('solicitudes', 'empresas'));
     }
 
-    // ── CREATE ──
+    public function exportarSolicitudes(Request $request)
+    {
+        $query = Solicitud::with(['empresa', 'sede'])
+            ->withCount('examenes')
+            ->withCount('articulos');
+
+        if ($request->filled('busqueda')) {
+            $b = $request->busqueda;
+            $query->where(function ($q) use ($b) {
+                $q->whereHas('empresa', fn($qq) => $qq->where('nombre', 'like', "%$b%"))
+                ->orWhereHas('sede', fn($qq) => $qq->where('nombre', 'like', "%$b%"));
+            });
+        }
+        if ($request->filled('empresa')) {
+            $query->where('ID_EMPRESA', $request->empresa);
+        }
+        if ($request->filled('estado')) {
+            $query->where('ESTADO_SOLICITUD', $request->estado);
+        }
+        if ($request->filled('desde')) {
+            $query->whereDate('FECHA_SOLICITUD', '>=', $request->desde);
+        }
+        if ($request->filled('hasta')) {
+            $query->whereDate('FECHA_SOLICITUD', '<=', $request->hasta);
+        }
+
+        $ordenables = ['FECHA_SOLICITUD' => 'FECHA_SOLICITUD', 'EMPRESA' => 'ID_EMPRESA', 'ESTADO' => 'ESTADO_SOLICITUD'];
+        $ordenarPor = $ordenables[$request->get('orden')] ?? 'FECHA_SOLICITUD';
+        $direccion  = $request->get('dir') === 'asc' ? 'asc' : 'desc';
+
+        $solicitudes = $query->orderBy($ordenarPor, $direccion)->get();
+
+        $wb = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $ws = $wb->getActiveSheet();
+        $ws->setTitle('Solicitudes');
+
+        $headers = ['#', 'Cliente', 'Sede', 'Responsable', 'Correo', 'Fecha', 'Exámenes', 'Artículos', 'Estado'];
+        $this->estilizarEncabezado($ws, $headers);
+
+        foreach ($solicitudes as $i => $s) {
+            $row = $i + 2;
+            $ws->setCellValue("A{$row}", $s->ID_SOLICITUD);
+            $ws->setCellValue("B{$row}", $s->empresa?->nombre ?? '—');
+            $ws->setCellValue("C{$row}", $s->sede?->nombre ?? '—');
+            $ws->setCellValue("D{$row}", $s->RESPONSABLE_NOMBRE);
+            $ws->setCellValue("E{$row}", $s->RESPONSABLE_CORREO);
+            $ws->setCellValue("F{$row}", \Carbon\Carbon::parse($s->FECHA_SOLICITUD)->format('d/m/Y'));
+            $ws->setCellValue("G{$row}", $s->examenes_count);
+            $ws->setCellValue("H{$row}", $s->articulos_count);
+            $ws->setCellValue("I{$row}", ucfirst($s->ESTADO_SOLICITUD));
+
+            if ($i % 2 === 0) {
+                $ws->getStyle("A{$row}:I{$row}")->getFill()
+                    ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
+                    ->getStartColor()->setARGB('FFF8F9FA');
+            }
+        }
+
+        foreach (['A'=>8,'B'=>26,'C'=>22,'D'=>24,'E'=>26,'F'=>12,'G'=>10,'H'=>10,'I'=>14] as $col => $w) {
+            $ws->getColumnDimension($col)->setWidth($w);
+        }
+
+        $this->descargarSpreadsheet($wb, 'solicitudes_' . now()->format('Ymd_His') . '.xlsx');
+    }
+
     public function create()
     {
         $empresas = Empresa::where('estado', 'activo')->orderBy('nombre')->get();
         return view('admin.solicitudes.create', compact('empresas'));
     }
 
-    // ── STORE ──
     public function store(Request $request)
     {
         $request->validate([
@@ -62,6 +149,7 @@ class AdminSolicitudController extends Controller
             'SESIONES_SIMULTANEAS' => 'required|in:si,no',
             'HORARIO_DE_ATENCION'  => 'nullable|string',
             'OBSERVACIONES'        => 'nullable|string',
+            'ENVIO_ZONA'           => 'nullable|in:cdmx_area_metropolitana,foraneo',
         ]);
 
         $solicitud = Solicitud::create([
@@ -76,6 +164,7 @@ class AdminSolicitudController extends Controller
             'SESIONES_SIMULTANEAS'    => $request->SESIONES_SIMULTANEAS,
             'HORARIO_DE_ATENCION'     => $request->HORARIO_DE_ATENCION ?? '',
             'OBSERVACIONES'           => $request->OBSERVACIONES ?? '',
+            'ENVIO_ZONA'              => $request->ENVIO_ZONA,
             'CANTIDAD_EXAMENES'       => 0,
             'CANTIDAD_EXAMENES_APLICADOS' => 0,
             'ESTADO_SOLICITUD'        => 'pendiente',
@@ -83,36 +172,347 @@ class AdminSolicitudController extends Controller
             'FECHA_SOLICITUD'         => now(),
         ]);
 
-        return redirect()->route('admin.solicitudes.edit', $solicitud->ID_SOLICITUD)
-            ->with('success', 'Solicitud creada. Ahora agrega los exámenes y artículos.');
+        return redirect()->route('admin.solicitudes.envio.show', $solicitud->ID_SOLICITUD)
+            ->with('success', 'Solicitud creada. Ahora agrega los exámenes y artículos en la pestaña Envío.');
     }
 
-    // ── EDIT ──
-    public function edit(Solicitud $solicitud)
+    // ── PESTAÑA: DATOS GENERALES ──
+    public function showDatos(Solicitud $solicitud)
     {
-        $solicitud->load([
-            'empresa',
-            'sede',
-            'contacto',
-            'examenes.articulos',
+        $solicitud->load(['empresa', 'sede', 'contacto']);
+        $empresas = Empresa::where('estado', 'activo')->orderBy('nombre')->get();
+
+        return view('admin.solicitudes.show-datos', compact('solicitud', 'empresas'));
+    }
+
+    public function updateDatos(Request $request, Solicitud $solicitud)
+    {
+        $request->validate([
+            'ID_EMPRESA'           => 'required|exists:empresas,id',
+            'ID_SEDE'              => 'required|exists:sedes,id',
+            'ID_CONTACTO'          => 'required|exists:contactos,id',
+            'RESPONSABLE_NOMBRE'   => 'required|string|max:255',
+            'RESPONSABLE_CORREO'   => 'nullable|email|max:255',
+            'RESPONSABLE_TELEFONO' => 'nullable|string|max:20',
+            'RESPONSABLE_CELULAR'  => 'nullable|string|max:20',
+            'DIRECCION_ENVIO'      => 'nullable|string',
+            'SESIONES_SIMULTANEAS' => 'required|in:si,no',
+            'HORARIO_DE_ATENCION'  => 'nullable|string',
+            'OBSERVACIONES'        => 'nullable|string',
+            'ENVIO_ZONA'           => 'nullable|in:cdmx_area_metropolitana,foraneo',
         ]);
-        $empresas     = Empresa::where('estado', 'activo')->orderBy('nombre')->get();
+
+        $solicitud->update([
+            'ID_EMPRESA'           => $request->ID_EMPRESA,
+            'ID_SEDE'              => $request->ID_SEDE,
+            'ID_CONTACTO'          => $request->ID_CONTACTO,
+            'RESPONSABLE_NOMBRE'   => $request->RESPONSABLE_NOMBRE,
+            'RESPONSABLE_CORREO'   => $request->RESPONSABLE_CORREO ?? '',
+            'RESPONSABLE_TELEFONO' => $request->RESPONSABLE_TELEFONO ?? '',
+            'RESPONSABLE_CELULAR'  => $request->RESPONSABLE_CELULAR ?? '',
+            'DIRECCION_ENVIO'      => $request->DIRECCION_ENVIO ?? '',
+            'SESIONES_SIMULTANEAS' => $request->SESIONES_SIMULTANEAS,
+            'HORARIO_DE_ATENCION'  => $request->HORARIO_DE_ATENCION ?? '',
+            'OBSERVACIONES'        => $request->OBSERVACIONES ?? '',
+            'ENVIO_ZONA'           => $request->ENVIO_ZONA,
+        ]);
+
+        return redirect()->route('admin.solicitudes.show', $solicitud->ID_SOLICITUD)
+            ->with('success', 'Datos generales actualizados correctamente.');
+    }
+
+    // ── PESTAÑA: ENVÍO ──
+    public function showEnvio(Solicitud $solicitud)
+    {
+        $solicitud->load(['empresa', 'sede', 'examenes.articulos']);
         $tipoExamenes = TipoExamen::where('estado', 'activo')->orderBy('nombre')->get();
 
-        return view('admin.solicitudes.edit', compact('solicitud', 'empresas', 'tipoExamenes'));
+        $examenesData = $solicitud->examenes->map(function ($examen) {
+            return [
+                'examen'  => $examen,
+                'bloques' => $this->agruparArticulosPorBloques($examen->articulos),
+            ];
+        });
+
+        return view('admin.solicitudes.show-envio', compact('solicitud', 'tipoExamenes', 'examenesData'));
     }
 
-    // ── SHOW ──
-    public function show(Solicitud $solicitud)
+    public function exportarEnvios(Request $request)
     {
-        $solicitud->load([
-            'empresa',
-            'sede',
-            'contacto',
-            'examenes.articulos.articulo',
+        $query = Solicitud::with(['empresa', 'sede'])
+            ->withCount('examenes')
+            ->withCount('articulos')
+            ->whereIn('ESTADO_SOLICITUD', ['pendiente', 'enviada']);
+
+        if ($request->filled('busqueda')) {
+            $b = $request->busqueda;
+            $query->whereHas('empresa', fn($q) => $q->where('nombre', 'like', "%$b%"))
+                ->orWhereHas('sede', fn($q) => $q->where('nombre', 'like', "%$b%"));
+        }
+
+        $solicitudes = $query->orderBy('FECHA_SOLICITUD', 'desc')->get();
+
+        $wb = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $ws = $wb->getActiveSheet();
+        $ws->setTitle('Envíos');
+
+        $headers = ['#', 'Empresa', 'Sede', 'Responsable', 'Correo', 'Fecha solicitud', 'Exámenes', 'Artículos', 'Estado'];
+        $this->estilizarEncabezado($ws, $headers);
+
+        foreach ($solicitudes as $i => $s) {
+            $row = $i + 2;
+            $ws->setCellValue("A{$row}", $s->ID_SOLICITUD);
+            $ws->setCellValue("B{$row}", $s->empresa?->nombre ?? '—');
+            $ws->setCellValue("C{$row}", $s->sede?->nombre ?? '—');
+            $ws->setCellValue("D{$row}", $s->RESPONSABLE_NOMBRE);
+            $ws->setCellValue("E{$row}", $s->RESPONSABLE_CORREO);
+            $ws->setCellValue("F{$row}", \Carbon\Carbon::parse($s->FECHA_SOLICITUD)->format('d/m/Y'));
+            $ws->setCellValue("G{$row}", $s->examenes_count);
+            $ws->setCellValue("H{$row}", $s->articulos_count);
+            $ws->setCellValue("I{$row}", ucfirst($s->ESTADO_SOLICITUD));
+
+            if ($i % 2 === 0) {
+                $ws->getStyle("A{$row}:I{$row}")->getFill()
+                    ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
+                    ->getStartColor()->setARGB('FFFFF8F0');
+            }
+        }
+
+        foreach (['A'=>8,'B'=>26,'C'=>22,'D'=>24,'E'=>26,'F'=>14,'G'=>10,'H'=>10,'I'=>14] as $col => $w) {
+            $ws->getColumnDimension($col)->setWidth($w);
+        }
+
+        $this->descargarSpreadsheet($wb, 'envios_' . now()->format('Ymd_His') . '.xlsx');
+    }
+
+    /**
+     * Agrupa artículos de una solicitud (SolicitudArticulo) en bloques de series consecutivas por FOLIO.
+     * Los artículos a granel (sin serie) forman un solo bloque por FOLIO.
+     */
+    private function agruparArticulosPorBloques($articulos)
+    {
+        $bloques = collect();
+
+        foreach ($articulos->groupBy('FOLIO') as $folio => $items) {
+            $primero = $items->first();
+
+            if (!$primero->tieneSerie()) {
+                $bloques->push([
+                    'folio'   => $folio,
+                    'nombre'  => $primero->NOMBRE,
+                    'rango'   => 'Granel',
+                    'count'   => $items->count(),
+                    'cantidad_enviada' => $items->sum('CANTIDAD_ENVIADA'),
+                    'ids'     => $items->pluck('ID')->toArray(),
+                    'estado'  => $primero->ESTADO,
+                ]);
+                continue;
+            }
+
+            $porPrefijo = [];
+            foreach ($items as $item) {
+                if (preg_match('/^(.*?)(\d+)$/', $item->SERIE, $m)) {
+                    $prefijo  = $m[1];
+                    $numerico = (int) $m[2];
+                } else {
+                    $prefijo  = $item->SERIE;
+                    $numerico = 0;
+                }
+                $porPrefijo[$prefijo][] = ['n' => $numerico, 'item' => $item];
+            }
+
+            foreach ($porPrefijo as $lista) {
+                usort($lista, fn($a, $b) => $a['n'] <=> $b['n']);
+                $actual = [$lista[0]];
+
+                for ($i = 1; $i < count($lista); $i++) {
+                    if ($lista[$i]['n'] === end($actual)['n'] + 1) {
+                        $actual[] = $lista[$i];
+                    } else {
+                        $bloques->push($this->armarBloqueSolicitud($folio, $primero->NOMBRE, $actual));
+                        $actual = [$lista[$i]];
+                    }
+                }
+                $bloques->push($this->armarBloqueSolicitud($folio, $primero->NOMBRE, $actual));
+            }
+        }
+
+        return $bloques;
+    }
+
+    private function armarBloqueSolicitud(string $folio, string $nombre, array $lista): array
+    {
+        $items   = collect($lista)->pluck('item');
+        $primero = $items->first();
+        $ultimo  = $items->last();
+
+        return [
+            'folio'   => $folio,
+            'nombre'  => $nombre,
+            'rango'   => $primero->SERIE === $ultimo->SERIE ? $primero->SERIE : "{$primero->SERIE}–{$ultimo->SERIE}",
+            'count'   => $items->count(),
+            'cantidad_enviada' => $items->count(),
+            'ids'     => $items->pluck('ID')->toArray(),
+            'estado'  => $primero->ESTADO,
+        ];
+    }
+
+    // ── ELIMINAR ARTÍCULOS EN LOTE (bloque completo) ──
+    public function eliminarArticulosLote(Request $request, Solicitud $solicitud)
+    {
+        if (!$solicitud->isPendiente()) {
+            return response()->json(['error' => 'La solicitud no es editable.'], 403);
+        }
+
+        $request->validate([
+            'ids'   => 'required|array|min:1',
+            'ids.*' => 'integer|exists:al_solicitudes_articulos,ID',
         ]);
 
-        return view('admin.solicitudes.show', compact('solicitud'));
+        DB::transaction(function () use ($request) {
+            $items = SolicitudArticulo::whereIn('ID', $request->ids)->get();
+
+            foreach ($items as $item) {
+                $articulo = Articulo::find($item->ID_ARTICULO);
+                if ($articulo) {
+                    $articulo->increment('CANTIDAD_ALMACEN', $item->CANTIDAD_ENVIADA);
+                    $articulo->decrement('CANTIDAD_SOLICITUDES', $item->CANTIDAD_ENVIADA);
+                }
+            }
+
+            SolicitudArticulo::whereIn('ID', $request->ids)->delete();
+        });
+
+        return response()->json(['success' => true]);
+    }
+
+    public function updateEnvio(Request $request, Solicitud $solicitud)
+    {
+        $request->validate([
+            'ENVIO_ZONA'             => 'nullable|in:cdmx_area_metropolitana,foraneo',
+            'ENVIO_EXAMEN'           => 'nullable|string|max:255',
+            'ENVIO_VERSION'          => 'nullable|string|max:255',
+            'ENVIO_NUMERO_HOJAS'     => 'nullable|integer|min:0',
+            'ENVIO_PASS_USB'         => 'nullable|string|max:255',
+            'ENVIO_CANTIDAD_SOBRES'  => 'nullable|integer|min:0',
+            'ENVIO_FOLIOS_AUDIO'     => 'nullable|string|max:255',
+            'ENVIO_FECHA_ENVIO'      => 'nullable|date',
+            'ENVIO_DIAS_PERMITIDO'   => 'nullable|integer|min:0',
+            'ENVIO_PAQUETERIA'       => 'nullable|string|max:255',
+            'ENVIO_PAQUETERIA_GUIA'  => 'nullable|string|max:255',
+            'ENVIO_PAQUETERIA_COSTO' => 'nullable|numeric|min:0',
+            'ENVIO_NOTAS'            => 'nullable|string',
+        ]);
+
+        $solicitud->update([
+            'ENVIO_ZONA'             => $request->ENVIO_ZONA,
+            'ENVIO_EXAMEN'           => $request->ENVIO_EXAMEN ?? '',
+            'ENVIO_VERSION'          => $request->ENVIO_VERSION ?? '',
+            'ENVIO_NUMERO_HOJAS'     => $request->ENVIO_NUMERO_HOJAS,
+            'ENVIO_PASS_USB'         => $request->ENVIO_PASS_USB ?? '',
+            'ENVIO_CANTIDAD_SOBRES'  => $request->ENVIO_CANTIDAD_SOBRES,
+            'ENVIO_FOLIOS_AUDIO'     => $request->ENVIO_FOLIOS_AUDIO ?? '',
+            'ENVIO_FECHA_ENVIO'      => $request->ENVIO_FECHA_ENVIO,
+            'ENVIO_DIAS_PERMITIDO'   => $request->ENVIO_DIAS_PERMITIDO,
+            'ENVIO_PAQUETERIA'       => $request->ENVIO_PAQUETERIA ?? '',
+            'ENVIO_PAQUETERIA_GUIA'  => $request->ENVIO_PAQUETERIA_GUIA ?? '',
+            'ENVIO_PAQUETERIA_COSTO' => $request->ENVIO_PAQUETERIA_COSTO,
+            'ENVIO_NOTAS'            => $request->ENVIO_NOTAS ?? '',
+        ]);
+
+        return redirect()->route('admin.solicitudes.envio.show', $solicitud->ID_SOLICITUD)
+            ->with('success', 'Datos de envío actualizados correctamente.');
+    }
+
+    // ── PESTAÑA: DEVOLUCIÓN ──
+    public function showDevolucion(Solicitud $solicitud)
+    {
+        $solicitud->load(['empresa', 'sede', 'examenes.articulos']);
+        $cajasAbiertas = Caja::whereNull('FECHA_CIERRE')->orderBy('NUMERO')->get();
+
+        return view('admin.solicitudes.show-devolucion', compact('solicitud', 'cajasAbiertas'));
+    }
+
+    // ── PESTAÑA: FACTURACIÓN ──
+    public function showFacturacion(Solicitud $solicitud)
+    {
+        $solicitud->load(['empresa', 'sede', 'pagos']);
+
+        return view('admin.solicitudes.show-facturacion', compact('solicitud'));
+    }
+
+    public function exportarFacturacion(Request $request)
+    {
+        $query = Solicitud::with(['empresa', 'sede'])
+            ->whereIn('ESTADO_SOLICITUD', ['enviada', 'retornada']);
+
+        if ($request->filled('busqueda')) {
+            $b = $request->busqueda;
+            $query->whereHas('empresa', fn($q) => $q->where('nombre', 'like', "%$b%"))
+                ->orWhereHas('sede', fn($q) => $q->where('nombre', 'like', "%$b%"));
+        }
+        if ($request->filled('estado_factura')) {
+            $query->where('ESTADO_FACTURA', $request->estado_factura);
+        }
+
+        $solicitudes = $query->orderBy('FECHA_SOLICITUD', 'desc')->get();
+
+        $wb = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $ws = $wb->getActiveSheet();
+        $ws->setTitle('Facturación');
+
+        $headers = ['#', 'Empresa', 'Sede', 'Fecha solicitud', 'Importe', 'Estado factura'];
+        $this->estilizarEncabezado($ws, $headers);
+
+        foreach ($solicitudes as $i => $s) {
+            $row = $i + 2;
+            $ws->setCellValue("A{$row}", $s->ID_SOLICITUD);
+            $ws->setCellValue("B{$row}", $s->empresa?->nombre ?? '—');
+            $ws->setCellValue("C{$row}", $s->sede?->nombre ?? '—');
+            $ws->setCellValue("D{$row}", \Carbon\Carbon::parse($s->FECHA_SOLICITUD)->format('d/m/Y'));
+            $ws->setCellValue("E{$row}", $s->IMPORTE_FACTURA ?? 0);
+            $ws->getStyle("E{$row}")->getNumberFormat()->setFormatCode('"$"#,##0.00');
+            $ws->setCellValue("F{$row}", ucfirst($s->ESTADO_FACTURA));
+
+            if ($i % 2 === 0) {
+                $ws->getStyle("A{$row}:F{$row}")->getFill()
+                    ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
+                    ->getStartColor()->setARGB('FFF8F9FA');
+            }
+        }
+
+        $last = count($solicitudes) + 2;
+        $ws->setCellValue("D{$last}", 'TOTAL');
+        $ws->getStyle("D{$last}")->getFont()->setBold(true);
+        $ws->setCellValue("E{$last}", "=SUM(E2:E" . ($last - 1) . ")");
+        $ws->getStyle("E{$last}")->getFont()->setBold(true);
+        $ws->getStyle("E{$last}")->getNumberFormat()->setFormatCode('"$"#,##0.00');
+
+        foreach (['A'=>8,'B'=>26,'C'=>22,'D'=>14,'E'=>14,'F'=>16] as $col => $w) {
+            $ws->getColumnDimension($col)->setWidth($w);
+        }
+
+        $this->descargarSpreadsheet($wb, 'facturacion_' . now()->format('Ymd_His') . '.xlsx');
+    }
+
+    public function updateFacturacion(Request $request, Solicitud $solicitud)
+    {
+        $request->validate([
+            'ESTADO_FACTURA'            => 'required|in:pendiente,prefactura,facturada',
+            'FACTURACION_FECHA'         => 'nullable|date',
+            'FACTURACION_DIAS_CREDITO'  => 'nullable|integer|min:0',
+            'FACTURACION_NOTAS'         => 'nullable|string',
+        ]);
+
+        $solicitud->update([
+            'ESTADO_FACTURA'           => $request->ESTADO_FACTURA,
+            'FACTURACION_FECHA'        => $request->FACTURACION_FECHA,
+            'FACTURACION_DIAS_CREDITO' => $request->FACTURACION_DIAS_CREDITO,
+            'FACTURACION_NOTAS'        => $request->FACTURACION_NOTAS ?? '',
+        ]);
+
+        return redirect()->route('admin.solicitudes.facturacion.show', $solicitud->ID_SOLICITUD)
+            ->with('success', 'Datos de facturación actualizados correctamente.');
     }
 
     // ── UPDATE (datos generales) ──
@@ -220,10 +620,13 @@ class AdminSolicitudController extends Controller
     }
 
     // ── ELIMINAR EXAMEN ──
-    public function eliminarExamen(Solicitud $solicitud, SolicitudExamen $examen)
+    public function eliminarExamen(Request $request, Solicitud $solicitud, SolicitudExamen $examen)
     {
         if (!$solicitud->isPendiente()) {
-            return response()->json(['error' => 'La solicitud no es editable.'], 403);
+            if ($request->wantsJson()) {
+                return response()->json(['error' => 'La solicitud no es editable.'], 403);
+            }
+            return back()->with('error', 'La solicitud no es editable.');
         }
 
         DB::transaction(function () use ($solicitud, $examen) {
@@ -240,7 +643,12 @@ class AdminSolicitudController extends Controller
             $examen->delete();
         });
 
-        return response()->json(['success' => true]);
+        if ($request->wantsJson()) {
+            return response()->json(['success' => true]);
+        }
+
+        return redirect()->route('admin.solicitudes.envio.show', $solicitud->ID_SOLICITUD)
+            ->with('success', 'Examen eliminado correctamente.');
     }
 
     // ── BUSCAR ARTÍCULO PARA SOLICITUD ──
@@ -490,68 +898,104 @@ class AdminSolicitudController extends Controller
         return response()->json(['success' => true]);
     }
 
-    // ── RETORNAR ARTÍCULO ──
-    public function retornarArticulo(Request $request, Solicitud $solicitud, SolicitudArticulo $articuloSolicitud)
+    // ── PROCESAR DEVOLUCIÓN EN LOTE ──
+    public function procesarDevolucion(Request $request, Solicitud $solicitud)
     {
-        if (!$solicitud->isRetornada()) {
-            return response()->json(['error' => 'La solicitud debe estar en estado retornada.'], 403);
-        }
+        $request->validate([
+            'id_caja_destino'              => 'nullable|integer|exists:al_cajas,ID',
+            'items'                        => 'required|array',
+            'items.*.id'                   => 'required|integer|exists:al_solicitudes_articulos,ID',
+            'items.*.estado_devolucion'    => 'required|in:aplicado,no_aplicado,danado,faltante',
+            'items.*.nombre_candidato'     => 'nullable|string|max:255',
+        ]);
 
-        if ($articuloSolicitud->isRetornado()) {
-            return response()->json(['error' => 'Este artículo ya fue retornado.'], 422);
-        }
-
-        $tieneSerie = $articuloSolicitud->tieneSerie();
-
-        if ($tieneSerie) {
-            $request->validate([
-                'destino' => 'required|in:almacen,destruccion,perdido',
-            ]);
-            $aAlmacen      = $request->destino === 'almacen' ? 1 : 0;
-            $aDestruccion  = $request->destino === 'destruccion' ? 1 : 0;
-            $aPerdidos     = $request->destino === 'perdido' ? 1 : 0;
-        } else {
-            $request->validate([
-                'cantidad_almacen'     => 'required|integer|min:0',
-                'cantidad_destruccion' => 'required|integer|min:0',
-                'cantidad_perdidos'    => 'required|integer|min:0',
-            ]);
-            $total = $request->cantidad_almacen + $request->cantidad_destruccion + $request->cantidad_perdidos;
-            if ($total !== (int) $articuloSolicitud->CANTIDAD_ENVIADA) {
-                return response()->json([
-                    'error' => "La suma debe ser igual a la cantidad enviada ({$articuloSolicitud->CANTIDAD_ENVIADA})."
-                ], 422);
+        // Validar que la caja elegida (si viene) siga abierta
+        $cajaElegida = null;
+        if ($request->filled('id_caja_destino')) {
+            $cajaElegida = Caja::whereNull('FECHA_CIERRE')->find($request->id_caja_destino);
+            if (!$cajaElegida) {
+                return back()->with('error', 'La caja seleccionada ya no está disponible (fue cerrada). Selecciona otra.');
             }
-            $aAlmacen     = $request->cantidad_almacen;
-            $aDestruccion = $request->cantidad_destruccion;
-            $aPerdidos    = $request->cantidad_perdidos;
         }
 
-        DB::transaction(function () use ($request, $solicitud, $articuloSolicitud, $aAlmacen, $aDestruccion, $aPerdidos) {
-            $articuloSolicitud->update([
-                'CANTIDAD_A_ALMACEN'     => $aAlmacen,
-                'CANTIDAD_A_DESTRUCCION' => $aDestruccion,
-                'CANTIDAD_PERDIDOS'      => $aPerdidos,
-                'UBICACION_DESTRUCCION'  => $request->ubicacion_destruccion ?? '',
-                'NOMBRE_CANDIDATO'       => $request->nombre_candidato ?? '',
-                'RAZON_PERDIDA'          => $request->razon_perdida ?? '',
-                'FECHA_RETORNO'          => now()->format('Y-m-d'),
-                'ESTADO'                 => 'retornado',
-            ]);
+        DB::transaction(function () use ($request, $solicitud, $cajaElegida) {
+            $cajaParaDestruccion = $cajaElegida;
 
-            $articulo = Articulo::find($articuloSolicitud->ID_ARTICULO);
-            if ($articulo) {
-                $articulo->increment('CANTIDAD_ALMACEN', $aAlmacen);
-                $articulo->increment('CANTIDAD_DESTRUCCION', $aDestruccion);
-                $articulo->increment('CANTIDAD_PERDIDOS', $aPerdidos);
-                $total = $aAlmacen + $aDestruccion + $aPerdidos;
-                $articulo->decrement('CANTIDAD_SOLICITUDES', $total);
+            foreach ($request->items as $itemData) {
+                $sa = SolicitudArticulo::find($itemData['id']);
+
+                if (!$sa || $sa->ID_SOLICITUD != $solicitud->ID_SOLICITUD || $sa->isRetornado()) {
+                    continue;
+                }
+
+                $estado   = $itemData['estado_devolucion'];
+                $cantidad = $sa->CANTIDAD_ENVIADA;
+
+                $aAlmacen = $aDestruccion = $aPerdidos = 0;
+                $ubicacion = '';
+                $idCaja = null;
+
+                if (in_array($estado, ['aplicado', 'danado'])) {
+                    $aDestruccion = $cantidad;
+
+                    if (!$cajaParaDestruccion) {
+                        $cajaParaDestruccion = $this->obtenerCajaAbierta();
+                    }
+
+                    $idCaja    = $cajaParaDestruccion->ID;
+                    $ubicacion = $cajaParaDestruccion->NOMBRE;
+                } elseif ($estado === 'no_aplicado') {
+                    $aAlmacen = $cantidad;
+                } elseif ($estado === 'faltante') {
+                    $aPerdidos = $cantidad;
+                }
+
+                $sa->update([
+                    'ESTADO_DEVOLUCION'      => $estado,
+                    'NOMBRE_CANDIDATO'       => $itemData['nombre_candidato'] ?? $sa->NOMBRE_CANDIDATO,
+                    'CANTIDAD_A_ALMACEN'     => $aAlmacen,
+                    'CANTIDAD_A_DESTRUCCION' => $aDestruccion,
+                    'CANTIDAD_PERDIDOS'      => $aPerdidos,
+                    'UBICACION_DESTRUCCION'  => $ubicacion,
+                    'ID_CAJA'                => $idCaja,
+                    'FECHA_RETORNO'          => now()->format('Y-m-d'),
+                    'ESTADO'                 => 'retornado',
+                ]);
+
+                $articulo = Articulo::find($sa->ID_ARTICULO);
+                if ($articulo) {
+                    $articulo->increment('CANTIDAD_ALMACEN', $aAlmacen);
+                    $articulo->increment('CANTIDAD_DESTRUCCION', $aDestruccion);
+                    $articulo->increment('CANTIDAD_PERDIDOS', $aPerdidos);
+                    $articulo->decrement('CANTIDAD_SOLICITUDES', $cantidad);
+                }
             }
         });
 
-        return response()->json(['success' => true]);
+        return redirect()->route('admin.solicitudes.devolucion.show', $solicitud->ID_SOLICITUD)
+            ->with('success', 'Devolución procesada correctamente.');
     }
 
+/**
+ * Devuelve una caja de destrucción abierta (FECHA_CIERRE null).
+ * Si no hay ninguna abierta, crea una nueva con el siguiente número consecutivo.
+ */
+private function obtenerCajaAbierta(): Caja
+{
+    $caja = Caja::whereNull('FECHA_CIERRE')->orderBy('NUMERO')->first();
+
+    if ($caja) {
+        return $caja;
+    }
+
+    $ultimoNumero = Caja::max('NUMERO') ?? 0;
+    $nuevoNumero  = $ultimoNumero + 1;
+
+    return Caja::create([
+        'NOMBRE'  => "Caja {$nuevoNumero}",
+        'NUMERO'  => $nuevoNumero,
+    ]);
+}
     // ── DESTROY ──
     public function destroy(Solicitud $solicitud)
     {
@@ -742,7 +1186,7 @@ class AdminSolicitudController extends Controller
         $query = Solicitud::with(['empresa', 'sede'])
             ->withCount('examenes')
             ->withCount('articulos')
-            ->where('ESTADO_SOLICITUD', 'pendiente');
+            ->whereIn('ESTADO_SOLICITUD', ['pendiente', 'enviada']);
 
         if ($request->filled('busqueda')) {
             $b = $request->busqueda;
@@ -778,7 +1222,7 @@ class AdminSolicitudController extends Controller
     public function indexFacturacion(Request $request)
     {
         $query = Solicitud::with(['empresa', 'sede'])
-            ->where('ESTADO_SOLICITUD', 'enviada');
+            ->whereIn('ESTADO_SOLICITUD', ['enviada', 'retornada']);
 
         if ($request->filled('busqueda')) {
             $b = $request->busqueda;
@@ -793,5 +1237,30 @@ class AdminSolicitudController extends Controller
         $solicitudes = $query->orderBy('FECHA_SOLICITUD', 'desc')->paginate(15)->withQueryString();
 
         return view('admin.solicitudes.facturacion', compact('solicitudes'));
+    }
+
+    private function estilizarEncabezado($ws, array $headers)
+    {
+        foreach ($headers as $col => $header) {
+            $cell = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col + 1) . '1';
+            $ws->setCellValue($cell, $header);
+            $ws->getStyle($cell)->getFont()->setBold(true);
+            $ws->getStyle($cell)->getFill()
+                ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
+                ->getStartColor()->setARGB('FF0F448A');
+            $ws->getStyle($cell)->getFont()->getColor()->setARGB('FFFFFFFF');
+            $ws->getStyle($cell)->getAlignment()->setHorizontal('center');
+        }
+    }
+
+    private function descargarSpreadsheet($wb, string $nombreArchivo)
+    {
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header('Content-Disposition: attachment;filename="' . $nombreArchivo . '"');
+        header('Cache-Control: max-age=0');
+
+        $writer = \PhpOffice\PhpSpreadsheet\IOFactory::createWriter($wb, 'Xlsx');
+        $writer->save('php://output');
+        exit;
     }
 }

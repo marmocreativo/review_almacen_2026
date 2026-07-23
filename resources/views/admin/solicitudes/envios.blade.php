@@ -2,7 +2,12 @@
     <x-slot name="header">
         <div class="flex items-center justify-between gap-2 flex-wrap">
             <h2 class="text-xl font-semibold">Envíos</h2>
-            <a href="{{ route('admin.solicitudes.create') }}" class="btn btn-primary btn-sm gap-1">
+            <div class="flex gap-2">
+                <a href="{{ route('admin.envios.exportar', request()->query()) }}" class="btn btn-success btn-sm gap-1">
+                    <x-heroicon-o-arrow-down-tray class="w-4 h-4" />
+                    <span class="hidden sm:inline">Exportar</span>
+                </a>
+                <a href="{{ route('admin.solicitudes.create') }}" class="btn btn-primary btn-sm gap-1">
                 <x-heroicon-o-plus class="w-4 h-4" />
                 <span class="hidden sm:inline">Nueva solicitud</span>
                 <span class="sm:hidden">Nueva</span>
@@ -70,7 +75,7 @@
                                 <td class="text-center font-mono">{{ $solicitud->articulos_count }}</td>
                                 <td>
                                     <div class="flex gap-1 justify-end">
-                                        <a href="{{ route('admin.solicitudes.edit', $solicitud->ID_SOLICITUD) }}"
+                                        <a href="{{ route('admin.solicitudes.envio.show', $solicitud->ID_SOLICITUD) }}"
                                             class="btn btn-primary btn-xs gap-1" title="Armar envío">
                                             <x-heroicon-o-truck class="w-4 h-4" />
                                             Armar envío
@@ -133,7 +138,7 @@
                                 </div>
 
                                 <div class="flex gap-2">
-                                    <a href="{{ route('admin.solicitudes.edit', $solicitud->ID_SOLICITUD) }}"
+                                    <a href="{{ route('admin.solicitudes.envio.show', $solicitud->ID_SOLICITUD) }}"
                                         class="btn btn-primary btn-sm gap-1 flex-1">
                                         <x-heroicon-o-truck class="w-4 h-4" />
                                         Armar envío

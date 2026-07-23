@@ -1,6 +1,12 @@
 <x-app-layout>
     <x-slot name="header">
-        <h2 class="text-xl font-semibold">Facturación</h2>
+        <div class="flex items-center justify-between gap-2 flex-wrap">
+            <h2 class="text-xl font-semibold">Facturación</h2>
+            <a href="{{ route('admin.facturacion.exportar', request()->query()) }}" class="btn btn-success btn-sm gap-1">
+                <x-heroicon-o-arrow-down-tray class="w-4 h-4" />
+                <span class="hidden sm:inline">Exportar</span>
+            </a>
+        </div>
     </x-slot>
 
     <x-alert />

@@ -32,12 +32,31 @@ class Solicitud extends Model
         'FACTURA_PDF',
         'FACTURA_XML',
         'FECHA_VENCIMIENTO_COBRANZA',
+        'ENVIO_ZONA',
+        'ENVIO_EXAMEN',
+        'ENVIO_VERSION',
+        'ENVIO_NUMERO_HOJAS',
+        'ENVIO_PASS_USB',
+        'ENVIO_CANTIDAD_SOBRES',
+        'ENVIO_FOLIOS_AUDIO',
+        'ENVIO_FECHA_ENVIO',
+        'ENVIO_DIAS_PERMITIDO',
+        'ENVIO_PAQUETERIA',
+        'ENVIO_PAQUETERIA_GUIA',
+        'ENVIO_PAQUETERIA_COSTO',
+        'ENVIO_NOTAS',
+        'FACTURACION_FECHA',
+        'FACTURACION_DIAS_CREDITO',
+        'FACTURACION_NOTAS',
     ];
 
     protected $casts = [
         'FECHA_SOLICITUD' => 'datetime',
         'IMPORTE_FACTURA' => 'decimal:2',
         'FECHA_VENCIMIENTO_COBRANZA' => 'date',
+        'ENVIO_FECHA_ENVIO'        => 'date',
+        'ENVIO_PAQUETERIA_COSTO'   => 'decimal:2',
+        'FACTURACION_FECHA'        => 'date',
     ];
 
     public $timestamps = false;

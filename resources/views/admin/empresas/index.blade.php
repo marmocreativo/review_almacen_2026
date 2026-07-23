@@ -1,11 +1,11 @@
 <x-app-layout>
     <x-slot name="header">
         <div class="flex items-center justify-between gap-2 flex-wrap">
-            <h2 class="text-xl font-semibold">Empresas</h2>
+            <h2 class="text-xl font-semibold">Clientes</h2>
             <a href="{{ route('admin.empresas.create') }}" class="btn btn-primary btn-sm gap-1">
                 <x-heroicon-o-plus class="w-4 h-4" />
-                <span class="hidden sm:inline">Nueva empresa</span>
-                <span class="sm:hidden">Nueva</span>
+                <span class="hidden sm:inline">Nuevo cliente</span>
+                <span class="sm:hidden">Nuevo</span>
             </a>
         </div>
     </x-slot>
@@ -43,6 +43,7 @@
                     <thead>
                         <tr>
                             <th>Nombre</th>
+                            <th>Tipo</th>
                             <th>Razón social</th>
                             <th>RFC</th>
                             <th>Sedes</th>
@@ -68,13 +69,24 @@
                                         </a>
                                     </div>
                                 </td>
+                                <td>
+                                    @php
+                                        $tipoBadge = match($empresa->tipo_cliente) {
+                                            'corporativo' => 'badge-info',
+                                            'academico'   => 'badge-success',
+                                            'gobierno'    => 'badge-warning',
+                                            default       => 'badge-ghost',
+                                        };
+                                    @endphp
+                                    <span class="badge badge-sm {{ $tipoBadge }}">{{ ucfirst($empresa->tipo_cliente) }}</span>
+                                </td>
                                 <td>{{ $empresa->razon_social ?? '—' }}</td>
                                 <td class="font-mono text-sm">{{ $empresa->rfc ?? '—' }}</td>
                                 <td>
-                                    <a href="{{ route('admin.empresas.sedes.index', $empresa) }}"
+                                    <div
                                         class="badge badge-ghost">
                                         {{ $empresa->sedes_count }} sedes
-                                    </a>
+                                </div>
                                 </td>
                                 <td>
                                     <span class="badge {{ $empresa->estado === 'activo' ? 'badge-success' : 'badge-error' }}">
@@ -146,6 +158,15 @@
                                 <span class="badge badge-sm {{ $empresa->estado === 'activo' ? 'badge-success' : 'badge-error' }}">
                                     {{ $empresa->estado }}
                                 </span>
+                                @php
+                                    $tipoBadge = match($empresa->tipo_cliente) {
+                                        'corporativo' => 'badge-info',
+                                        'academico'   => 'badge-success',
+                                        'gobierno'    => 'badge-warning',
+                                        default       => 'badge-ghost',
+                                    };
+                                @endphp
+                                <span class="badge badge-sm {{ $tipoBadge }}">{{ ucfirst($empresa->tipo_cliente) }}</span>
                             </div>
                         </div>
 

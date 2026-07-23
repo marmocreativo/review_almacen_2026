@@ -33,10 +33,7 @@
                             <td>{{ $sede->calle_y_numero ?? '—' }}</td>
                             <td>{{ $sede->ciudad ?? '—' }}</td>
                             <td>
-                                <a href="{{ route('admin.empresas.sedes.contactos.index', [$empresa, $sede]) }}"
-                                    class="badge badge-ghost">
-                                    {{ $sede->contactos_count }} contactos
-                                </a>
+                                <span class="badge badge-ghost">{{ $sede->contactos_count }} contactos</span>
                             </td>
                             <td>
                                 <span class="badge {{ $sede->estado === 'activo' ? 'badge-success' : 'badge-error' }}">

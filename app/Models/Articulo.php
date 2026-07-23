@@ -95,4 +95,9 @@ class Articulo extends Model
         }
         return ['label' => 'Sin existencias', 'class' => 'badge-ghost'];
     }
+
+    public function tipoExamen()
+    {
+        return $this->belongsTo(\App\Models\TipoExamen::class, 'ID_TIPO_EXAMEN');
+    }
 }

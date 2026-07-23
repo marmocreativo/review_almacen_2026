@@ -1,29 +1,21 @@
 <x-app-layout>
     <x-slot name="header">
         <div class="flex items-center justify-between gap-2 flex-wrap">
-            <div class="flex items-center gap-3">
-                <h2 class="text-xl font-semibold">Inventario</h2>
-                <div class="join">
-                    <a href="{{ request()->fullUrlWithQuery(['vista' => null, 'page' => 1]) }}"
-                        class="btn btn-xs join-item {{ !$vistaDetalle ? 'btn-primary' : 'btn-ghost' }}">
-                        Agrupado
-                    </a>
-                    <a href="{{ request()->fullUrlWithQuery(['vista' => 'detalle', 'page' => 1]) }}"
-                        class="btn btn-xs join-item {{ $vistaDetalle ? 'btn-primary' : 'btn-ghost' }}">
-                        Detallado
-                    </a>
-                </div>
-            </div>
+            <h2 class="text-xl font-semibold">Inventario</h2>
             <div class="flex gap-2 flex-wrap justify-end">
-                <a href="{{ route('admin.articulos.exportar') }}" class="btn btn-success btn-sm">
-                    ↓ Excel
+                <a href="{{ route('admin.articulos.index', array_merge(request()->except(['vista','page']), ['vista' => 'bloques'])) }}"
+                    class="btn btn-sm {{ $vista === 'bloques' ? 'btn-primary' : 'btn-ghost' }}">
+                    Vista por bloques
                 </a>
-                <button onclick="document.getElementById('modal-individual').showModal()"
-                    class="btn btn-primary btn-sm">
+                <a href="{{ route('admin.articulos.index', array_merge(request()->except(['vista','page']), ['vista' => 'detalle'])) }}"
+                    class="btn btn-sm {{ $vista === 'detalle' ? 'btn-primary' : 'btn-ghost' }}">
+                    Vista detalle
+                </a>
+                <a href="{{ route('admin.articulos.exportar') }}" class="btn btn-success btn-sm">↓ Excel</a>
+                <button onclick="document.getElementById('modal-individual').showModal()" class="btn btn-primary btn-sm">
                     + Alta individual
                 </button>
-                <button onclick="document.getElementById('modal-rango').showModal()"
-                    class="btn btn-secondary btn-sm">
+                <button onclick="document.getElementById('modal-rango').showModal()" class="btn btn-secondary btn-sm">
                     + Alta por rango
                 </button>
             </div>
@@ -32,485 +24,300 @@
 
     <x-alert />
 
-    {{-- BÚSQUEDA --}}
-    <div x-data="{ avanzada: {{ request()->hasAny(['folio','serie','tipo','formato']) && !request()->filled('q') ? 'true' : 'false' }} }" class="mb-4">
-
-        {{-- Búsqueda simple --}}
-        <form method="GET" x-show="!avanzada" class="card bg-base-100 shadow">
-            <div class="card-body py-3">
-                {{-- Fila 1: input + buscar --}}
-                <div class="flex gap-2 items-center">
+    {{-- FILTROS --}}
+    <form method="GET" class="card bg-base-100 shadow mb-4">
+        <div class="card-body py-3">
+            <input type="hidden" name="vista" value="{{ $vista }}" />
+            <div class="flex flex-wrap gap-2 items-end">
+                <div class="form-control flex-1 min-w-[200px]">
+                    <label class="label py-0"><span class="label-text text-xs">Búsqueda rápida</span></label>
                     <input type="text" name="q" value="{{ request('q') }}"
-                        placeholder="Buscar por ID Item o folio..."
-                        class="input input-bordered flex-1" />
-                    @if(request('orden_campo'))
-                        <input type="hidden" name="orden_campo" value="{{ request('orden_campo') }}">
-                        <input type="hidden" name="orden_dir" value="{{ request('orden_dir') }}">
-                    @endif
-                    <button type="submit" class="btn btn-primary">
-                        <x-heroicon-o-magnifying-glass class="w-4 h-4" />
-                        <span class="hidden sm:inline ml-1">Buscar</span>
-                    </button>
+                        placeholder="ID Item, folio o nombre..."
+                        class="input input-bordered input-sm w-full" />
                 </div>
-                {{-- Fila 2: acciones secundarias --}}
-                <div class="flex gap-2 items-center mt-1">
-                    @if(request()->filled('q'))
-                        <a href="{{ route('admin.articulos.index') }}" class="btn btn-ghost btn-sm gap-1">
-                            <x-heroicon-o-x-mark class="w-4 h-4" />
-                            Limpiar
-                        </a>
-                    @endif
-                    <button type="button" @click="avanzada = true" class="btn btn-ghost btn-sm gap-1">
-                        <x-heroicon-o-adjustments-horizontal class="w-4 h-4" />
-                        Búsqueda avanzada
-                    </button>
+                <div class="form-control w-32">
+                    <label class="label py-0"><span class="label-text text-xs">Tipo</span></label>
+                    <select name="tipo" class="select select-bordered select-sm w-full">
+                        <option value="">Todos</option>
+                        <option value="fisico" {{ request('tipo') === 'fisico' ? 'selected' : '' }}>Físico</option>
+                        <option value="digital" {{ request('tipo') === 'digital' ? 'selected' : '' }}>Digital</option>
+                    </select>
                 </div>
-            </div>
-        </form>
-
-        {{-- Búsqueda avanzada --}}
-        <form method="GET" x-show="avanzada" class="card bg-base-100 shadow">
-            <div class="card-body py-3">
-                {{-- Grid de filtros --}}
-                <div class="grid grid-cols-2 sm:grid-cols-3 lg:flex lg:flex-wrap gap-3 items-end">
-                    <div class="form-control col-span-1">
-                        <label class="label py-0"><span class="label-text text-xs">ID Item</span></label>
-                        <input type="text" name="folio" value="{{ request('folio') }}"
-                            placeholder="Folio..." class="input input-bordered input-sm w-full" />
-                    </div>
-                    <div class="form-control col-span-1">
-                        <label class="label py-0"><span class="label-text text-xs">Folio</span></label>
-                        <input type="text" name="serie" value="{{ request('serie') }}"
-                            placeholder="Serie..." class="input input-bordered input-sm w-full" />
-                    </div>
-                    <div class="form-control col-span-1">
-                        <label class="label py-0"><span class="label-text text-xs">Tipo</span></label>
-                        <select name="tipo" class="select select-bordered select-sm w-full">
-                            <option value="">Todos</option>
-                            <option value="fisico"   {{ request('tipo') === 'fisico'   ? 'selected' : '' }}>Físico</option>
-                            <option value="digital"  {{ request('tipo') === 'digital'  ? 'selected' : '' }}>Digital</option>
-                        </select>
-                    </div>
-                    <div class="form-control col-span-1">
-                        <label class="label py-0"><span class="label-text text-xs">Formato</span></label>
-                        <input type="text" name="formato" value="{{ request('formato') }}"
-                            placeholder="Formato..." class="input input-bordered input-sm w-full" />
-                    </div>
-                    <div class="form-control col-span-1">
-                        <label class="label py-0"><span class="label-text text-xs">Ordenar por</span></label>
-                        <select name="orden_campo" class="select select-bordered select-sm w-full">
-                            <option value="FOLIO"            {{ request('orden_campo','FOLIO') === 'FOLIO'            ? 'selected' : '' }}>ID Item</option>
-                            <option value="SERIE"            {{ request('orden_campo') === 'SERIE'            ? 'selected' : '' }}>Folio</option>
-                            <option value="FORMATO"          {{ request('orden_campo') === 'FORMATO'          ? 'selected' : '' }}>Formato</option>
-                            <option value="CANTIDAD_ALMACEN" {{ request('orden_campo') === 'CANTIDAD_ALMACEN' ? 'selected' : '' }}>Cant. almacén</option>
-                        </select>
-                    </div>
-                    <div class="form-control col-span-1">
-                        <label class="label py-0"><span class="label-text text-xs">Dirección</span></label>
-                        <select name="orden_dir" class="select select-bordered select-sm w-full">
-                            <option value="asc"  {{ request('orden_dir','asc') === 'asc'  ? 'selected' : '' }}>↑ Asc</option>
-                            <option value="desc" {{ request('orden_dir') === 'desc' ? 'selected' : '' }}>↓ Desc</option>
-                        </select>
-                    </div>
+                <div class="form-control w-48">
+                    <label class="label py-0"><span class="label-text text-xs">Tipo de examen</span></label>
+                    <select name="tipo_examen" class="select select-bordered select-sm w-full">
+                        <option value="">Todos</option>
+                        @foreach($tiposExamen as $te)
+                            <option value="{{ $te->id }}" {{ request('tipo_examen') == $te->id ? 'selected' : '' }}>
+                                {{ $te->nombre }}
+                            </option>
+                        @endforeach
+                    </select>
                 </div>
-
-                {{-- Botones de acción --}}
-                <div class="flex flex-wrap gap-2 mt-3 pt-3 border-t border-base-200">
-                    <button type="submit" class="btn btn-primary btn-sm gap-1">
-                        <x-heroicon-o-funnel class="w-4 h-4" />
-                        Filtrar
-                    </button>
-                    <a href="{{ route('admin.articulos.index') }}" class="btn btn-ghost btn-sm gap-1">
-                        <x-heroicon-o-x-mark class="w-4 h-4" />
-                        Limpiar
-                    </a>
-                    <button type="button" @click="avanzada = false" class="btn btn-ghost btn-sm gap-1 ml-auto">
-                        <x-heroicon-o-chevron-left class="w-4 h-4" />
-                        Búsqueda simple
-                    </button>
+                <div class="form-control w-40">
+                    <label class="label py-0"><span class="label-text text-xs">Ordenar por</span></label>
+                    <select name="orden" class="select select-bordered select-sm w-full">
+                        <option value="FOLIO" {{ request('orden', 'FOLIO') === 'FOLIO' ? 'selected' : '' }}>ID Item</option>
+                        <option value="NOMBRE" {{ request('orden') === 'NOMBRE' ? 'selected' : '' }}>Nombre</option>
+                        <option value="CANTIDAD_ALMACEN" {{ request('orden') === 'CANTIDAD_ALMACEN' ? 'selected' : '' }}>Cantidad almacén</option>
+                        <option value="COSTO_UNITARIO" {{ request('orden') === 'COSTO_UNITARIO' ? 'selected' : '' }}>Costo unitario</option>
+                    </select>
                 </div>
-            </div>
-        </form>
-
-        {{-- Orden rápido (visible en búsqueda simple) --}}
-        <div x-show="!avanzada" class="flex gap-2 mt-2 items-center text-sm text-base-content/60 overflow-x-auto pb-1">
-            <span>Ordenar:</span>
-            @foreach(['FOLIO'=>'ID Item','SERIE'=>'Folio','FORMATO'=>'Formato','CANTIDAD_ALMACEN'=>'Almacén'] as $campo => $label)
-                @php
-                    $activo = request('orden_campo', 'FOLIO') === $campo;
-                    $dir = ($activo && request('orden_dir','asc') === 'asc') ? 'desc' : 'asc';
-                @endphp
-                <a href="{{ request()->fullUrlWithQuery(['orden_campo'=>$campo,'orden_dir'=>$dir,'page'=>1]) }}"
-                    class="btn btn-xs {{ $activo ? 'btn-primary' : 'btn-ghost' }}">
-                    {{ $label }}
-                    @if($activo)
-                        {{ request('orden_dir','asc') === 'asc' ? '↑' : '↓' }}
-                    @endif
+                <div class="form-control w-32">
+                    <label class="label py-0"><span class="label-text text-xs">Dirección</span></label>
+                    <select name="dir" class="select select-bordered select-sm w-full">
+                        <option value="asc" {{ request('dir', 'asc') === 'asc' ? 'selected' : '' }}>Ascendente</option>
+                        <option value="desc" {{ request('dir') === 'desc' ? 'selected' : '' }}>Descendente</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary btn-sm gap-1">
+                    <x-heroicon-o-magnifying-glass class="w-4 h-4" />
+                    Filtrar
+                </button>
+                <a href="{{ route('admin.articulos.index', ['vista' => $vista]) }}" class="btn btn-ghost btn-sm gap-1">
+                    <x-heroicon-o-x-mark class="w-4 h-4" />
+                    Limpiar
                 </a>
-            @endforeach
+            </div>
         </div>
-    </div>
+    </form>
 
-    @if($vistaDetalle)
-    {{-- Tabla detallada: folios individuales sin agrupar --}}
-    <div class="card bg-base-100 shadow">
-        <div class="card-body p-0">
-            {{-- VISTA DESKTOP: tabla --}}
-            <div class="hidden md:block overflow-x-auto">
-                <table class="table table-sm">
+    {{-- Barra de acciones + tabla + modal de edición (comparten estado Alpine) --}}
+    <div x-data="{...seleccionArticulos(), ...edicionArticulo()}" x-cloak>
+
+        <div x-show="seleccionados.length > 0" x-transition
+            class="alert alert-warning mb-4 flex items-center justify-between" style="display:none">
+            <span><strong x-text="seleccionados.length"></strong> artículo(s) seleccionado(s)</span>
+            <button type="button" class="btn btn-error btn-sm" @click="eliminarSeleccionados()">
+                <x-heroicon-o-trash class="w-4 h-4" />
+                Eliminar seleccionados
+            </button>
+        </div>
+
+        <div class="card bg-base-100 shadow">
+            <div class="card-body p-0 overflow-x-auto">
+                <table class="table table-zebra">
                     <thead>
-                        <tr class="bg-base-200">
+                        <tr>
+                            <th>
+                                <input type="checkbox" class="checkbox checkbox-sm" @change="toggleTodos($event)" />
+                            </th>
                             <th>ID Item</th>
-                            <th>Folio</th>
+                            <th>{{ $vista === 'bloques' ? 'Rango' : 'Folio' }}</th>
                             <th>Nombre</th>
-                            <th>Formato</th>
                             <th>Tipo</th>
-                            <th class="text-center">Estado</th>
-                            <th class="text-center">Acciones</th>
+                            <th>Tipo examen</th>
+                            <th>Cantidad almacén</th>
+                            <th>Estado</th>
+                            <th></th>
                         </tr>
                     </thead>
                     <tbody>
-                        @forelse($paginator as $articulo)
-                            @php
-                                $estadoItem = \App\Models\Articulo::estadoBadge($articulo->CANTIDAD_ALMACEN, $articulo->CANTIDAD_SOLICITUDES, $articulo->CANTIDAD_DESTRUCCION, $articulo->CANTIDAD_PERDIDOS);
-                                $deletable = $articulo->esDeletable();
-                            @endphp
-                            <tr class="hover">
-                                <td class="font-mono font-bold text-primary">{{ $articulo->FOLIO }}</td>
-                                <td class="font-mono text-xs">{{ $articulo->SERIE ?: '—' }}</td>
-                                <td>{{ $articulo->NOMBRE }}</td>
-                                <td>{{ $articulo->FORMATO ?: '—' }}</td>
-                                <td>
-                                    <span class="badge badge-sm {{ $articulo->TIPO === 'fisico' ? 'badge-info' : 'badge-accent' }}">
-                                        {{ $articulo->TIPO }}
-                                    </span>
-                                </td>
-                                <td class="text-center">
-                                    <span class="badge badge-sm {{ $estadoItem['class'] }}">{{ $estadoItem['label'] }}</span>
-                                    <button type="button"
-                                        onclick="verDetalleCantidades('{{ $articulo->FOLIO }}', {{ $articulo->CANTIDAD_ALMACEN }}, {{ $articulo->CANTIDAD_SOLICITUDES }}, {{ $articulo->CANTIDAD_DESTRUCCION }}, {{ $articulo->CANTIDAD_PERDIDOS }})"
-                                        class="btn btn-xs btn-circle btn-ghost align-middle" title="Ver detalle">
-                                        <x-heroicon-o-question-mark-circle class="w-4 h-4" />
-                                    </button>
-                                </td>
-                                <td class="text-center">
-                                    <div class="flex gap-1 justify-center">
-                                        <a href="{{ route('admin.articulos.show', $articulo) }}"
-                                            class="btn btn-xs btn-outline" title="Ver">
-                                            <x-heroicon-o-eye class="w-3.5 h-3.5" />
-                                        </a>
-                                        <a href="{{ route('admin.articulos.edit', $articulo) }}"
-                                            class="btn btn-xs btn-info" title="Editar">
-                                            <x-heroicon-o-pencil class="w-3.5 h-3.5" />
-                                        </a>
-                                        @if($deletable)
-                                            <button
-                                                onclick="confirmarEliminar({{ $articulo->ID_ARTICULO }})"
-                                                class="btn btn-xs btn-error" title="Eliminar">
-                                                <x-heroicon-o-trash class="w-3.5 h-3.5" />
-                                            </button>
-                                        @endif
-                                    </div>
-                                </td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="7" class="text-center text-base-content/50 py-8">
-                                    No hay artículos en el inventario.
-                                </td>
-                            </tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
-
-            {{-- VISTA MÓVIL: cards --}}
-            <div class="md:hidden divide-y divide-base-200">
-                @forelse($paginator as $articulo)
-                    @php
-                        $estadoItem = \App\Models\Articulo::estadoBadge($articulo->CANTIDAD_ALMACEN, $articulo->CANTIDAD_SOLICITUDES, $articulo->CANTIDAD_DESTRUCCION, $articulo->CANTIDAD_PERDIDOS);
-                        $deletable = $articulo->esDeletable();
-                    @endphp
-                    <div class="p-3">
-                        <div class="flex items-center justify-between gap-2">
-                            <div class="flex-1 min-w-0">
-                                <div class="flex items-center gap-2">
-                                    <span class="font-mono font-bold text-primary text-sm">{{ $articulo->FOLIO }}</span>
-                                    <span class="text-xs text-base-content/40">{{ $articulo->TIPO === 'fisico' ? 'Físico' : 'Digital' }}</span>
-                                </div>
-                                <p class="text-sm font-medium mt-0.5 truncate">{{ $articulo->NOMBRE }}</p>
-                                <p class="text-xs text-base-content/50 font-mono">{{ $articulo->SERIE ?: 'Sin folio' }}</p>
-                            </div>
-                            <div class="flex flex-col items-end gap-1 shrink-0">
-                                <div class="flex items-center gap-1">
-                                    <span class="badge badge-xs {{ $estadoItem['class'] }}">{{ $estadoItem['label'] }}</span>
-                                    <button type="button"
-                                        onclick="verDetalleCantidades('{{ $articulo->FOLIO }}', {{ $articulo->CANTIDAD_ALMACEN }}, {{ $articulo->CANTIDAD_SOLICITUDES }}, {{ $articulo->CANTIDAD_DESTRUCCION }}, {{ $articulo->CANTIDAD_PERDIDOS }})"
-                                        class="btn btn-xs btn-circle btn-ghost">
-                                        <x-heroicon-o-question-mark-circle class="w-3.5 h-3.5" />
-                                    </button>
-                                </div>
-                                <div class="flex gap-1">
-                                    <a href="{{ route('admin.articulos.show', $articulo) }}" class="btn btn-xs btn-outline">
-                                        <x-heroicon-o-eye class="w-3.5 h-3.5" />
-                                    </a>
-                                    <a href="{{ route('admin.articulos.edit', $articulo) }}" class="btn btn-xs btn-info">
-                                        <x-heroicon-o-pencil class="w-3.5 h-3.5" />
-                                    </a>
-                                    @if($deletable)
-                                        <button onclick="confirmarEliminar({{ $articulo->ID_ARTICULO }})" class="btn btn-xs btn-error">
-                                            <x-heroicon-o-trash class="w-3.5 h-3.5" />
-                                        </button>
-                                    @endif
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                @empty
-                    <div class="text-center text-base-content/50 py-8">
-                        No hay artículos en el inventario.
-                    </div>
-                @endforelse
-            </div>
-        </div>
-    </div>
-    @else
-    {{-- Tabla agrupada por folio --}}
-    <div class="card bg-base-100 shadow">
-        <div class="card-body p-0">
-            {{-- VISTA DESKTOP: tabla --}}
-            <div class="hidden md:block overflow-x-auto">
-                <table class="table table-sm">
-                    <thead>
-                        <tr class="bg-base-200">
-                            <th class="w-8"></th>
-                            <th>ID Item</th>
-                            <th>Nombre</th>
-                            <th>Folios / Cantidad</th>
-                            <th>Formato</th>
-                            <th>Tipo</th>
-                            <th class="text-center">Estado</th>
-                            <th class="text-center">Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @forelse($paginator as $grupo)
-                            @php $gid = Str::slug($grupo['folio']); @endphp
-                            <tr class="bg-base-100 hover cursor-pointer font-medium"
-                                onclick="toggleGrupo('{{ $gid }}')">
-                                <td>
-                                    <x-heroicon-o-chevron-right
-                                        id="icon-{{ $gid }}"
-                                        class="w-4 h-4 transition-transform duration-200 text-base-content/40" />
-                                </td>
-                                <td class="font-mono font-bold text-primary">{{ $grupo['folio'] }}</td>
-                                <td>{{ $grupo['nombre'] }}</td>
-                                <td>
-                                    @if($grupo['tiene_serie'])
-                                        <div class="flex flex-wrap gap-1">
-                                            @foreach($grupo['rangos'] as $rango)
-                                                <span class="badge badge-outline badge-sm font-mono">{{ $rango }}</span>
-                                            @endforeach
-                                        </div>
-                                        <span class="text-xs text-base-content/50 mt-0.5 block">
-                                            {{ $grupo['total'] }} {{ $grupo['total'] === 1 ? 'pieza' : 'piezas' }}
-                                        </span>
-                                    @else
-                                        <span class="text-base-content/50 text-sm italic">A granel</span>
-                                    @endif
-                                </td>
-                                <td>{{ $grupo['formato'] ?: '—' }}</td>
-                                <td>
-                                    <span class="badge badge-sm {{ $grupo['tipo'] === 'fisico' ? 'badge-info' : 'badge-accent' }}">
-                                        {{ $grupo['tipo'] }}
-                                    </span>
-                                </td>
-                                <td class="text-center">
-                                    <span class="badge badge-sm {{ $grupo['estado']['class'] }}">{{ $grupo['estado']['label'] }}</span>
-                                    <button type="button"
-                                        onclick="event.stopPropagation(); verDetalleCantidades('{{ $grupo['folio'] }}', {{ $grupo['cantidad_almacen'] }}, {{ $grupo['cantidad_solicitudes'] }}, {{ $grupo['cantidad_destruccion'] }}, {{ $grupo['cantidad_perdidos'] }})"
-                                        class="btn btn-xs btn-circle btn-ghost align-middle" title="Ver detalle">
-                                        <x-heroicon-o-question-mark-circle class="w-4 h-4" />
-                                    </button>
-                                </td>
-                                <td class="text-center">
-                                    @if(!$grupo['tiene_serie'])
-                                        <button
-                                            onclick="event.stopPropagation(); abrirAgregarAlmacen({{ $grupo['items']->first()->ID_ARTICULO }}, {{ $grupo['cantidad_almacen'] }})"
-                                            class="btn btn-xs btn-ghost text-primary" title="Agregar al almacén">
-                                            <x-heroicon-o-plus class="w-4 h-4" />
-                                        </button>
-                                    @endif
-                                    @if(!empty($grupo['ids_deletables']))
-                                        <button
-                                            onclick="event.stopPropagation(); confirmarEliminarGrupo({{ json_encode($grupo['ids_deletables']) }}, '{{ $grupo['folio'] }}')"
-                                            class="btn btn-xs btn-ghost text-error" title="Eliminar ID Item">
-                                            <x-heroicon-o-trash class="w-4 h-4" />
-                                        </button>
-                                    @endif
-                                </td>
-                            </tr>
-
-                            @foreach($grupo['items'] as $articulo)
-                                @php $deletable = $articulo->esDeletable(); @endphp
-                                <tr class="grupo-{{ $gid }} hidden bg-base-200/40 text-sm">
-                                    <td></td>
-                                    <td class="pl-6 text-base-content/50 font-mono text-xs">└</td>
-                                    <td class="text-base-content/70">{{ $articulo->NOMBRE }}</td>
-                                    <td class="font-mono text-xs">{{ $articulo->SERIE ?: '—' }}</td>
-                                    <td class="text-xs text-base-content/60">{{ $articulo->FORMATO ?: '—' }}</td>
-                                    <td></td>
-                                    <td class="text-center">
-                                        @php $estadoItem = \App\Models\Articulo::estadoBadge($articulo->CANTIDAD_ALMACEN, $articulo->CANTIDAD_SOLICITUDES, $articulo->CANTIDAD_DESTRUCCION, $articulo->CANTIDAD_PERDIDOS); @endphp
-                                        <span class="badge badge-xs {{ $estadoItem['class'] }}">{{ $estadoItem['label'] }}</span>
+                        @forelse($paginator as $fila)
+                            @if($vista === 'bloques')
+                                @php
+                                    $ids = $fila['ids'];
+                                    $esGrupo = $fila['count'] > 1;
+                                    $otras = $fila['cantidad_solicitudes'] + $fila['cantidad_destruccion'] + $fila['cantidad_perdidos'];
+                                @endphp
+                                <tr>
+                                    <td>
+                                        <input type="checkbox" class="checkbox checkbox-sm row-check"
+                                            value="{{ implode(',', $ids) }}"
+                                            @change="toggleFila($event)"
+                                            {{ !$fila['es_deletable_lote'] ? 'disabled title=Tiene relaciones activas' : '' }} />
                                     </td>
-                                    <td class="text-center">
-                                        <div class="flex gap-1 justify-center">
-                                            <a href="{{ route('admin.articulos.show', $articulo) }}"
-                                                class="btn btn-xs btn-outline" title="Ver">
-                                                <x-heroicon-o-eye class="w-3.5 h-3.5" />
-                                            </a>
-                                            <a href="{{ route('admin.articulos.edit', $articulo) }}"
-                                                class="btn btn-xs btn-info" title="Editar">
-                                                <x-heroicon-o-pencil class="w-3.5 h-3.5" />
-                                            </a>
-                                            @if($deletable)
-                                                <button
-                                                    onclick="confirmarEliminar({{ $articulo->ID_ARTICULO }})"
-                                                    class="btn btn-xs btn-error" title="Eliminar">
-                                                    <x-heroicon-o-trash class="w-3.5 h-3.5" />
-                                                </button>
+                                    <td class="font-mono">{{ $fila['folio'] }}</td>
+                                    <td class="font-mono text-xs">{{ $fila['rango'] }} <span class="text-base-content/40">({{ $fila['count'] }})</span></td>
+                                    <td>{{ $fila['nombre'] }}</td>
+                                    <td>
+                                        <span class="badge badge-sm {{ $fila['tipo'] === 'fisico' ? 'badge-info' : 'badge-accent' }}">
+                                            {{ ucfirst($fila['tipo']) }}
+                                        </span>
+                                    </td>
+                                    <td class="text-xs">{{ $fila['tipo_examen'] ?? '—' }}</td>
+                                    <td>
+                                        <div class="flex items-center gap-1">
+                                            <span class="font-mono font-semibold">{{ $fila['cantidad_almacen'] }}</span>
+                                            @if($otras > 0)
+                                                <div class="dropdown dropdown-hover">
+                                                    <div tabindex="0" role="button" class="btn btn-ghost btn-xs btn-square">+</div>
+                                                    <div tabindex="0" class="dropdown-content z-10 card card-compact w-52 shadow bg-base-100 border border-base-300">
+                                                        <div class="card-body text-xs space-y-1">
+                                                            <p>Solicitudes: <strong>{{ $fila['cantidad_solicitudes'] }}</strong></p>
+                                                            <p>Destrucción: <strong>{{ $fila['cantidad_destruccion'] }}</strong></p>
+                                                            <p>Perdidos: <strong>{{ $fila['cantidad_perdidos'] }}</strong></p>
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             @endif
+                                        </div>
+                                    </td>
+                                    <td><span class="badge badge-sm {{ $fila['estado']['class'] }}">{{ $fila['estado']['label'] }}</span></td>
+                                    <td>
+                                        <div class="flex gap-1 justify-end">
+                                            @if($esGrupo)
+                                                <button type="button" class="btn btn-outline btn-info btn-xs"
+                                                    @click="abrirEdicionGrupo({{ implode(',', $ids) }})">Editar grupo</button>
+                                            @else
+                                                <button type="button" class="btn btn-outline btn-info btn-xs"
+                                                    @click="abrirEdicionIndividual({{ $ids[0] }})">Editar</button>
+                                            @endif
+                                            <a href="{{ route('admin.articulos.show', $ids[0]) }}"
+                                                class="btn btn-ghost btn-xs">Ver</a>
                                         </div>
                                     </td>
                                 </tr>
-                            @endforeach
+                            @else
+                                <tr>
+                                    <td>
+                                        <input type="checkbox" class="checkbox checkbox-sm row-check"
+                                            value="{{ $fila->ID_ARTICULO }}"
+                                            @change="toggleFila($event)"
+                                            {{ !$fila->esDeletable() ? 'disabled title=Tiene relaciones activas' : '' }} />
+                                    </td>
+                                    <td class="font-mono">{{ $fila->FOLIO }}</td>
+                                    <td class="font-mono text-xs">{{ $fila->SERIE ?: '—' }}</td>
+                                    <td>{{ $fila->NOMBRE }}</td>
+                                    <td>
+                                        <span class="badge badge-sm {{ $fila->TIPO === 'fisico' ? 'badge-info' : 'badge-accent' }}">
+                                            {{ ucfirst($fila->TIPO) }}
+                                        </span>
+                                    </td>
+                                    <td class="text-xs">{{ $fila->tipoExamen?->nombre ?? '—' }}</td>
+                                    <td>
+                                        <div class="flex items-center gap-1">
+                                            <span class="font-mono font-semibold">{{ $fila->CANTIDAD_ALMACEN }}</span>
+                                            @php $otras = $fila->CANTIDAD_SOLICITUDES + $fila->CANTIDAD_DESTRUCCION + $fila->CANTIDAD_PERDIDOS; @endphp
+                                            @if($otras > 0)
+                                                <div class="dropdown dropdown-hover">
+                                                    <div tabindex="0" role="button" class="btn btn-ghost btn-xs btn-square">+</div>
+                                                    <div tabindex="0" class="dropdown-content z-10 card card-compact w-52 shadow bg-base-100 border border-base-300">
+                                                        <div class="card-body text-xs space-y-1">
+                                                            <p>Solicitudes: <strong>{{ $fila->CANTIDAD_SOLICITUDES }}</strong></p>
+                                                            <p>Destrucción: <strong>{{ $fila->CANTIDAD_DESTRUCCION }}</strong></p>
+                                                            <p>Perdidos: <strong>{{ $fila->CANTIDAD_PERDIDOS }}</strong></p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            @endif
+                                        </div>
+                                    </td>
+                                    <td>
+                                        @php $b = \App\Models\Articulo::estadoBadge($fila->CANTIDAD_ALMACEN, $fila->CANTIDAD_SOLICITUDES, $fila->CANTIDAD_DESTRUCCION, $fila->CANTIDAD_PERDIDOS); @endphp
+                                        <span class="badge badge-sm {{ $b['class'] }}">{{ $b['label'] }}</span>
+                                    </td>
+                                    <td>
+                                        <div class="flex gap-1 justify-end">
+                                            <button type="button" class="btn btn-outline btn-info btn-xs"
+                                                @click="abrirEdicionIndividual({{ $fila->ID_ARTICULO }})">Editar</button>
+                                            <a href="{{ route('admin.articulos.show', $fila) }}" class="btn btn-ghost btn-xs">Ver</a>
+                                        </div>
+                                    </td>
+                                </tr>
+                            @endif
                         @empty
-                            <tr>
-                                <td colspan="9" class="text-center text-base-content/50 py-8">
-                                    No hay artículos en el inventario.
-                                </td>
-                            </tr>
+                            <tr><td colspan="9" class="text-center text-base-content/50 py-8">Sin resultados.</td></tr>
                         @endforelse
                     </tbody>
                 </table>
             </div>
-
-            {{-- VISTA MÓVIL: cards --}}
-            <div class="md:hidden divide-y divide-base-200">
-                @forelse($paginator as $grupo)
-                    @php $gid = Str::slug($grupo['folio']); @endphp
-                    <div class="p-3 grupo-mobile-card">
-
-                        {{-- Cabecera del grupo --}}
-                        <div class="flex items-center justify-between gap-2 cursor-pointer"
-                            onclick="toggleGrupoMobile('{{ $gid }}')">
-                            <div class="flex-1 min-w-0">
-                                <div class="flex items-center gap-2">
-                                    <span class="font-mono font-bold text-primary text-sm">{{ $grupo['folio'] }}</span>
-                                    <span class="text-xs text-base-content/40 font-normal">
-                                        {{ $grupo['tipo'] === 'fisico' ? 'Físico' : 'Digital' }}
-                                    </span>
-                                    @if($grupo['formato'])
-                                        <span class="text-xs text-base-content/30">· {{ $grupo['formato'] }}</span>
-                                    @endif
-                                </div>
-                                <p class="text-sm font-medium mt-0.5 truncate">{{ $grupo['nombre'] }}</p>
-                            </div>
-
-                            {{-- Cantidad almacén siempre visible --}}
-                            <div class="flex items-center gap-2 shrink-0">
-                                <div class="text-right">
-                                    <div class="font-mono font-bold text-lg leading-none">{{ $grupo['cantidad_almacen'] }}</div>
-                                    <div class="text-xs text-base-content/40">almacén</div>
-                                </div>
-                                <x-heroicon-o-chevron-right
-                                    id="icon-mobile-{{ $gid }}"
-                                    class="w-4 h-4 transition-transform duration-200 text-base-content/30" />
-                            </div>
-                        </div>
-
-                        {{-- Contenido desplegado --}}
-                        <div id="grupo-mobile-{{ $gid }}" class="hidden mt-3">
-
-                            {{-- Fila de stats + botón agregar --}}
-                            <div class="flex items-center gap-3 text-xs bg-base-200/60 rounded-lg px-3 py-2 mb-3">
-                                <span class="badge badge-sm {{ $grupo['estado']['class'] }}">{{ $grupo['estado']['label'] }}</span>
-                                <button type="button"
-                                    onclick="verDetalleCantidades('{{ $grupo['folio'] }}', {{ $grupo['cantidad_almacen'] }}, {{ $grupo['cantidad_solicitudes'] }}, {{ $grupo['cantidad_destruccion'] }}, {{ $grupo['cantidad_perdidos'] }})"
-                                    class="btn btn-xs btn-circle btn-ghost" title="Ver detalle">
-                                    <x-heroicon-o-question-mark-circle class="w-4 h-4" />
-                                </button>
-                                @if(!$grupo['tiene_serie'])
-                                    <button
-                                        onclick="abrirAgregarAlmacen({{ $grupo['items']->first()->ID_ARTICULO }}, {{ $grupo['cantidad_almacen'] }})"
-                                        class="btn btn-xs btn-primary gap-1 ml-auto">
-                                        <x-heroicon-o-plus class="w-3.5 h-3.5" />
-                                    </button>
-                                @endif
-                            </div>
-
-                            {{-- Series / items --}}
-                            <div class="space-y-2">
-                                @foreach($grupo['items'] as $articulo)
-                                    @php $deletable = $articulo->esDeletable(); @endphp
-                                    <div class="bg-base-200/50 rounded-lg p-2 flex items-center justify-between gap-2">
-                                        <div class="min-w-0 flex-1">
-                                            <p class="font-mono text-xs font-medium truncate">
-                                                {{ $articulo->SERIE ?: 'Sin folio' }}
-                                            </p>
-                                            <p class="text-xs text-base-content/50">
-                                                Almacén: {{ $articulo->CANTIDAD_ALMACEN }}
-                                            </p>
-                                        </div>
-                                        <div class="flex gap-1 shrink-0">
-                                            <a href="{{ route('admin.articulos.show', $articulo) }}"
-                                                class="btn btn-xs btn-outline" title="Ver">
-                                                <x-heroicon-o-eye class="w-4 h-4" />
-                                            </a>
-                                            <a href="{{ route('admin.articulos.edit', $articulo) }}"
-                                                class="btn btn-xs btn-info" title="Editar">
-                                                <x-heroicon-o-pencil class="w-4 h-4" />
-                                            </a>
-                                            @if($deletable)
-                                                <button
-                                                    onclick="confirmarEliminar({{ $articulo->ID_ARTICULO }})"
-                                                    class="btn btn-xs btn-error" title="Eliminar">
-                                                    <x-heroicon-o-trash class="w-4 h-4" />
-                                                </button>
-                                            @endif
-                                        </div>
-                                    </div>
-                                @endforeach
-                            </div>
-
-                            {{-- Botón eliminar grupo --}}
-                            @if(!empty($grupo['ids_deletables']))
-                                <div class="mt-2 flex justify-end">
-                                    <button
-                                        onclick="confirmarEliminarGrupo({{ json_encode($grupo['ids_deletables']) }}, '{{ $grupo['folio'] }}')"
-                                        class="btn btn-xs btn-error gap-1">
-                                        <x-heroicon-o-trash class="w-3.5 h-3.5" />
-                                        Eliminar ID Item
-                                    </button>
-                                </div>
-                            @endif
-
-                        </div>
-                    </div>
-                @empty
-                    <div class="text-center text-base-content/50 py-8">
-                        No hay artículos en el inventario.
-                    </div>
-                @endforelse
-            </div>
-
         </div>
+
+        <div class="mt-4">{{ $paginator->links() }}</div>
+
+        {{-- MODAL DE EDICIÓN --}}
+        <div x-cloak x-show="open" class="modal" :class="{ 'modal-open': open }">
+            <div class="modal-box max-w-xl">
+                <h3 class="font-bold text-lg mb-1" x-text="esGrupo ? 'Editar grupo (' + count + ' artículos)' : 'Editar artículo'"></h3>
+                <p class="text-sm text-base-content/60 mb-4" x-show="esGrupo">
+                    Estos cambios se aplicarán a los <span x-text="count"></span> artículos seleccionados. Folio y número de serie no se modifican aquí.
+                </p>
+
+                <div x-show="cargando" class="py-8 text-center text-base-content/50">Cargando...</div>
+
+                <form x-show="!cargando" @submit.prevent="guardar()">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+                        <template x-if="!esGrupo">
+                            <div class="form-control sm:col-span-2">
+                                <label class="label"><span class="label-text">ID Item *</span></label>
+                                <input type="text" x-model="form.FOLIO" class="input input-bordered" required />
+                            </div>
+                        </template>
+
+                        <div class="form-control sm:col-span-2">
+                            <label class="label"><span class="label-text">Nombre *</span></label>
+                            <input type="text" x-model="form.NOMBRE" class="input input-bordered" required />
+                        </div>
+
+                        <div class="form-control sm:col-span-2">
+                            <label class="label"><span class="label-text">Descripción</span></label>
+                            <textarea x-model="form.DESCRIPCION" rows="2" class="textarea textarea-bordered"></textarea>
+                        </div>
+
+                        <div class="form-control">
+                            <label class="label"><span class="label-text">Formato</span></label>
+                            <input type="text" x-model="form.FORMATO" class="input input-bordered" />
+                        </div>
+
+                        <div class="form-control">
+                            <label class="label"><span class="label-text">Tipo *</span></label>
+                            <select x-model="form.TIPO" class="select select-bordered" required>
+                                <option value="fisico">Físico</option>
+                                <option value="digital">Digital</option>
+                            </select>
+                        </div>
+
+                        <template x-if="!esGrupo">
+                            <div class="form-control">
+                                <label class="label"><span class="label-text">Folio</span></label>
+                                <input type="text" x-model="form.SERIE" class="input input-bordered" />
+                            </div>
+                        </template>
+
+                        <template x-if="!esGrupo">
+                            <div class="form-control">
+                                <label class="label"><span class="label-text">Folio (núm.)</span></label>
+                                <input type="text" x-model="form.SERIE_NUMERICO" class="input input-bordered" />
+                            </div>
+                        </template>
+
+                        <div class="form-control">
+                            <label class="label"><span class="label-text">Costo unitario</span></label>
+                            <input type="number" step="0.01" min="0" x-model="form.COSTO_UNITARIO" class="input input-bordered" />
+                        </div>
+
+                        <div class="form-control">
+                            <label class="label"><span class="label-text">Precio venta</span></label>
+                            <input type="number" step="0.01" min="0" x-model="form.PRECIO_VENTA" class="input input-bordered" />
+                        </div>
+
+                        <div class="form-control sm:col-span-2">
+                            <label class="label"><span class="label-text">Tipo de examen relacionado</span></label>
+                            <select x-model="form.ID_TIPO_EXAMEN" class="select select-bordered">
+                                <option value="">— Sin relación —</option>
+                                <template x-for="te in tiposExamen" :key="te.id">
+                                    <option :value="te.id" x-text="te.nombre"></option>
+                                </template>
+                            </select>
+                        </div>
+                    </div>
+
+                    <p class="text-error text-sm mt-3" x-show="error" x-text="error"></p>
+
+                    <div class="modal-action">
+                        <button type="button" class="btn btn-ghost btn-sm" @click="cerrar()">Cancelar</button>
+                        <button type="submit" class="btn btn-primary btn-sm" :disabled="guardando">
+                            <span x-show="!guardando">Guardar cambios</span>
+                            <span x-show="guardando">Guardando...</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
     </div>
-    @endif
-
-    <div class="mt-4">{{ $paginator->links() }}</div>
-
 
     {{-- ===================== MODAL ALTA INDIVIDUAL ===================== --}}
     <dialog id="modal-individual" class="modal">
@@ -553,6 +360,15 @@
                     <label class="label py-1"><span class="label-text font-medium">Cantidad en almacén</span></label>
                     <input type="number" id="i-cantidad" value="1" min="1" class="input input-bordered input-sm w-full" />
                     <p class="text-xs text-base-content/40 mt-1">Solo aplica si no capturas un folio (artículo a granel).</p>
+                </div>
+                <div class="form-control col-span-2">
+                    <label class="label py-1"><span class="label-text font-medium">Tipo de examen relacionado</span></label>
+                    <select id="i-tipo-examen" class="select select-bordered select-sm w-full">
+                        <option value="">— Sin relación —</option>
+                        @foreach($tiposExamen as $te)
+                            <option value="{{ $te->id }}">{{ $te->nombre }}</option>
+                        @endforeach
+                    </select>
                 </div>
             </div>
 
@@ -607,6 +423,15 @@
                     <label class="label py-1"><span class="label-text font-medium">Precio venta</span></label>
                     <input type="number" step="0.01" id="r-precio" value="0" class="input input-bordered input-sm w-full" />
                 </div>
+                <div class="form-control col-span-2">
+                    <label class="label py-1"><span class="label-text font-medium">Tipo de examen relacionado</span></label>
+                    <select id="r-tipo-examen" class="select select-bordered select-sm w-full">
+                        <option value="">— Sin relación —</option>
+                        @foreach($tiposExamen as $te)
+                            <option value="{{ $te->id }}">{{ $te->nombre }}</option>
+                        @endforeach
+                    </select>
+                </div>
             </div>
 
             <div id="preview-rango" class="mt-3 p-2 rounded bg-base-200 text-sm font-mono text-base-content/70 min-h-8"></div>
@@ -632,395 +457,297 @@
         <form method="dialog" class="modal-backdrop"><button>Cerrar</button></form>
     </dialog>
 
-    {{-- ===================== MODAL AGREGAR ALMACÉN ===================== --}}
-    <dialog id="modal-agregar-almacen" class="modal">
-        <div class="modal-box max-w-sm">
-            <h3 class="font-bold text-lg mb-1">Agregar al almacén</h3>
-            <p class="text-sm text-base-content/60 mb-4">
-                Cantidad actual: <strong id="almacen-actual">0</strong>
-            </p>
-            <div class="form-control">
-                <label class="label"><span class="label-text">Cantidad a agregar</span></label>
-                <input type="number" id="input-agregar-cantidad" min="1" value="1"
-                    class="input input-bordered" />
-            </div>
-            <div id="agregar-error" class="text-error text-sm mt-2 hidden"></div>
-            <div class="modal-action">
-                <button onclick="guardarAgregarAlmacen()" class="btn btn-primary">Agregar</button>
-                <form method="dialog"><button class="btn btn-ghost">Cancelar</button></form>
-            </div>
-        </div>
-        <form method="dialog" class="modal-backdrop"><button>Cerrar</button></form>
-    </dialog>
+    <script>
+        function edicionArticulo() {
+            return {
+                open: false,
+                cargando: false,
+                guardando: false,
+                error: '',
+                esGrupo: false,
+                count: 0,
+                ids: [],
+                tiposExamen: [],
+                form: {},
 
-    {{-- ===================== MODAL CONFIRMAR ELIMINAR ===================== --}}
-    <dialog id="modal-eliminar" class="modal">
-        <div class="modal-box max-w-sm">
-            <h3 class="font-bold text-lg text-error mb-2">¿Eliminar del inventario?</h3>
-            <p class="text-sm text-base-content/70 mb-4">Esta acción no se puede deshacer.</p>
-            <div class="modal-action">
-                <button onclick="ejecutarEliminar()" class="btn btn-error">Sí, eliminar</button>
-                <form method="dialog"><button class="btn btn-ghost">Cancelar</button></form>
-            </div>
-        </div>
-        <form method="dialog" class="modal-backdrop"><button>Cerrar</button></form>
-    </dialog>
+                async abrirEdicionIndividual(id) {
+                    this.esGrupo = false;
+                    this.ids = [id];
+                    this.open = true;
+                    this.cargando = true;
+                    this.error = '';
+                    try {
+                        const res = await fetch(`/admin/articulos/${id}/edit`, {
+                            headers: { 'Accept': 'application/json' }
+                        });
+                        const data = await res.json();
+                        this.tiposExamen = data.tiposExamen;
+                        this.form = {
+                            FOLIO: data.articulo.FOLIO,
+                            NOMBRE: data.articulo.NOMBRE,
+                            DESCRIPCION: data.articulo.DESCRIPCION,
+                            FORMATO: data.articulo.FORMATO,
+                            TIPO: data.articulo.TIPO,
+                            SERIE: data.articulo.SERIE,
+                            SERIE_NUMERICO: data.articulo.SERIE_NUMERICO,
+                            COSTO_UNITARIO: data.articulo.COSTO_UNITARIO,
+                            PRECIO_VENTA: data.articulo.PRECIO_VENTA,
+                            ID_TIPO_EXAMEN: data.articulo.ID_TIPO_EXAMEN ?? '',
+                        };
+                    } catch (e) {
+                        this.error = 'Error al cargar el artículo.';
+                    } finally {
+                        this.cargando = false;
+                    }
+                },
 
-    {{-- ===================== MODAL DETALLE DE CANTIDADES ===================== --}}
-    <dialog id="modal-detalle-cantidades" class="modal">
-        <div class="modal-box max-w-sm">
-            <h3 class="font-bold text-lg mb-1">Detalle de existencias</h3>
-            <p class="text-sm text-base-content/50 mb-4 font-mono" id="detalle-folio"></p>
-            <div class="grid grid-cols-2 gap-3">
-                <div class="text-center bg-base-200 rounded-lg p-3">
-                    <p class="text-xs text-base-content/50">Almacén</p>
-                    <p class="text-xl font-bold font-mono text-success" id="detalle-almacen">0</p>
-                </div>
-                <div class="text-center bg-base-200 rounded-lg p-3">
-                    <p class="text-xs text-base-content/50">Solicitudes</p>
-                    <p class="text-xl font-bold font-mono text-info" id="detalle-solicitudes">0</p>
-                </div>
-                <div class="text-center bg-base-200 rounded-lg p-3">
-                    <p class="text-xs text-base-content/50">Destrucción</p>
-                    <p class="text-xl font-bold font-mono text-warning" id="detalle-destruccion">0</p>
-                </div>
-                <div class="text-center bg-base-200 rounded-lg p-3">
-                    <p class="text-xs text-base-content/50">Perdidos</p>
-                    <p class="text-xl font-bold font-mono text-error" id="detalle-perdidos">0</p>
-                </div>
-            </div>
-            <div class="modal-action">
-                <form method="dialog"><button class="btn btn-ghost btn-sm">Cerrar</button></form>
-            </div>
-        </div>
-        <form method="dialog" class="modal-backdrop"><button>Cerrar</button></form>
-    </dialog>
+                async abrirEdicionGrupo(idsStr) {
+                    const ids = idsStr.toString().split(',').map(Number);
+                    this.esGrupo = true;
+                    this.ids = ids;
+                    this.open = true;
+                    this.cargando = true;
+                    this.error = '';
+                    try {
+                        const params = ids.map(id => `ids[]=${id}`).join('&');
+                        const res = await fetch(`/admin/articulos/grupo/editar?${params}`, {
+                            headers: { 'Accept': 'application/json' }
+                        });
+                        const data = await res.json();
+                        this.tiposExamen = data.tiposExamen;
+                        this.count = data.count;
+                        this.form = {
+                            NOMBRE: data.primero.NOMBRE,
+                            DESCRIPCION: data.primero.DESCRIPCION,
+                            FORMATO: data.primero.FORMATO,
+                            TIPO: data.primero.TIPO,
+                            COSTO_UNITARIO: data.primero.COSTO_UNITARIO,
+                            PRECIO_VENTA: data.primero.PRECIO_VENTA,
+                            ID_TIPO_EXAMEN: data.primero.ID_TIPO_EXAMEN ?? '',
+                        };
+                    } catch (e) {
+                        this.error = 'Error al cargar los artículos.';
+                    } finally {
+                        this.cargando = false;
+                    }
+                },
 
+                cerrar() {
+                    this.open = false;
+                    this.error = '';
+                },
 
-<script>
-    const csrfToken = '{{ csrf_token() }}';
-    const urlStore  = '{{ route('admin.articulos.store') }}';
-    const urlRango  = '{{ route('admin.articulos.rango') }}';
-    const urlBase   = '{{ url('admin/articulos') }}';
+                async guardar() {
+                    this.guardando = true;
+                    this.error = '';
+                    try {
+                        const url = this.esGrupo
+                            ? "{{ route('admin.articulos.grupo.update') }}"
+                            : `/admin/articulos/${this.ids[0]}`;
 
-    let _articulo_id_eliminar = null;
-    let _articulo_id_almacen  = null;
+                        const body = this.esGrupo
+                            ? { ...this.form, ids: this.ids }
+                            : this.form;
 
-    // ==================== ALTA INDIVIDUAL ====================
-    async function guardarIndividual() {
-        const error = document.getElementById('individual-error');
-        error.classList.add('hidden');
+                        const res = await fetch(url, {
+                            method: this.esGrupo ? 'PATCH' : 'PUT',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                                'Accept': 'application/json',
+                            },
+                            body: JSON.stringify(body),
+                        });
 
-        const payload = {
-            FOLIO:          document.getElementById('i-folio').value.trim(),
-            SERIE:          document.getElementById('i-serie').value.trim(),
-            NOMBRE:         document.getElementById('i-nombre').value.trim(),
-            FORMATO:        document.getElementById('i-formato').value.trim(),
-            TIPO:           document.getElementById('i-tipo').value,
-            COSTO_UNITARIO: document.getElementById('i-costo').value,
-            PRECIO_VENTA:   document.getElementById('i-precio').value,
-            CANTIDAD_ALMACEN: parseInt(document.getElementById('i-cantidad').value) || 1,
-        };
+                        if (!res.ok) {
+                            const data = await res.json().catch(() => ({}));
+                            this.error = data.message || 'Ocurrió un error al guardar.';
+                            this.guardando = false;
+                            return;
+                        }
 
-        const btn = document.getElementById('btn-guardar-individual');
-        const textoOriginal = btn.innerHTML;
-        btn.disabled = true;
-        btn.innerHTML = `<span class="loading loading-spinner loading-xs"></span> Agregando a inventario...`;
-
-        try {
-            const res = await fetch(urlStore, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
-                body: JSON.stringify(payload),
-            });
-            const data = await res.json().catch(() => ({}));
-
-            if (!res.ok || !data.success) {
-                error.textContent = data.message ?? 'Error al guardar.';
-                error.classList.remove('hidden');
-                return;
-            }
-
-            document.getElementById('modal-individual').close();
-            mostrarInforme({
-                titulo: 'Artículo agregado',
-                resumen: `Se agregó correctamente el artículo con ID Item <strong>${data.id_item}</strong>.`,
-            });
-        } finally {
-            btn.disabled = false;
-            btn.innerHTML = textoOriginal;
-        }
-    }
-
-    // ==================== ALTA POR RANGO ====================
-    function actualizarPreviewRango() {
-        const inicial = document.getElementById('r-serie-inicial').value.trim().toUpperCase();
-        const final   = document.getElementById('r-serie-final').value.trim().toUpperCase();
-        const preview = document.getElementById('preview-rango');
-        const patron  = /^S(\d{9})(?:-\d+)?$/;
-        const mInicial = inicial.match(patron);
-        const mFinal   = final.match(patron);
-
-        if (!mInicial || !mFinal) { preview.textContent = ''; return; }
-
-        const nInicial = parseInt(mInicial[1]);
-        const nFinal   = parseInt(mFinal[1]);
-        if (nFinal < nInicial) { preview.textContent = 'El folio final debe ser mayor o igual al inicial.'; return; }
-
-        const total = nFinal - nInicial + 1;
-        preview.textContent = `Se generarán ${total} folios: S${mInicial[1]} → S${mFinal[1]}`;
-    }
-    ['r-serie-inicial', 'r-serie-final'].forEach(id => {
-        document.getElementById(id)?.addEventListener('input', actualizarPreviewRango);
-    });
-
-    async function guardarRango() {
-        const error = document.getElementById('rango-error');
-        error.classList.add('hidden');
-
-        const payload = {
-            FOLIO:          document.getElementById('r-folio').value.trim(),
-            SERIE_INICIAL:  document.getElementById('r-serie-inicial').value.trim(),
-            SERIE_FINAL:    document.getElementById('r-serie-final').value.trim(),
-            NOMBRE:         document.getElementById('r-nombre').value.trim(),
-            FORMATO:        document.getElementById('r-formato').value.trim(),
-            TIPO:           document.getElementById('r-tipo').value,
-            COSTO_UNITARIO: document.getElementById('r-costo').value,
-            PRECIO_VENTA:   document.getElementById('r-precio').value,
-        };
-
-        const btn = document.getElementById('btn-guardar-rango');
-        const textoOriginal = btn.innerHTML;
-        btn.disabled = true;
-        btn.innerHTML = `<span class="loading loading-spinner loading-xs"></span> Agregando a inventario...`;
-
-        try {
-            const res = await fetch(urlRango, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
-                body: JSON.stringify(payload),
-            });
-            const data = await res.json().catch(() => ({}));
-
-            if (!res.ok || !data.success) {
-                error.textContent = data.message ?? 'Error al guardar.';
-                error.classList.remove('hidden');
-                return;
-            }
-
-            document.getElementById('modal-rango').close();
-            mostrarInforme({
-                titulo: 'Alta por rango completada',
-                resumen: `ID Item: <strong>${data.id_item}</strong>`,
-                agregados: data.agregados,
-                existentes: data.existentes,
-            });
-        } finally {
-            btn.disabled = false;
-            btn.innerHTML = textoOriginal;
-        }
-    }
-
-    // ==================== INFORME ====================
-    function mostrarInforme({ resumen, agregados = null, existentes = null }) {
-        const contenedor = document.getElementById('informe-contenido');
-        let html = `<p>${resumen}</p>`;
-
-        if (agregados) {
-            html += `<div class="alert alert-success"><span>${agregados.length} folio(s) agregados correctamente.</span></div>`;
-        }
-        if (existentes && existentes.length) {
-            html += `<div class="alert alert-warning"><span>${existentes.length} folio(s) no se agregaron porque ya existían: ${existentes.join(', ')}</span></div>`;
-        }
-
-        contenedor.innerHTML = html;
-        document.getElementById('modal-informe').showModal();
-    }
-
-    // ==================== AGREGAR ALMACÉN ====================
-    function abrirAgregarAlmacen(id, cantidadActual) {
-        _articulo_id_almacen = id;
-        document.getElementById('almacen-actual').textContent = cantidadActual;
-        document.getElementById('input-agregar-cantidad').value = 1;
-        document.getElementById('agregar-error').classList.add('hidden');
-        document.getElementById('modal-agregar-almacen').showModal();
-    }
-    async function guardarAgregarAlmacen() {
-        const cantidad = parseInt(document.getElementById('input-agregar-cantidad').value);
-        const errorEl  = document.getElementById('agregar-error');
-        if (!cantidad || cantidad < 1) {
-            errorEl.textContent = 'Ingresa una cantidad válida.';
-            errorEl.classList.remove('hidden');
-            return;
-        }
-        const res  = await fetch(`${urlBase}/${_articulo_id_almacen}/agregar-almacen`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
-            body: JSON.stringify({ cantidad }),
-        });
-        const data = await res.json();
-        if (data.success) {
-            document.getElementById('modal-agregar-almacen').close();
-            location.reload();
-        } else {
-            errorEl.textContent = 'Error al guardar.';
-            errorEl.classList.remove('hidden');
-        }
-    }
-
-    // ==================== ELIMINAR ====================
-    function confirmarEliminar(id) {
-        _articulo_id_eliminar = id;
-        document.getElementById('modal-eliminar').showModal();
-    }
-    async function ejecutarEliminar() {
-        document.getElementById('modal-eliminar').close();
-        if (window._eliminarModo === 'lote') {
-            const res = await fetch('{{ route('admin.articulos.destroy-lote') }}', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
-                body: JSON.stringify({ ids: window._lote_ids }),
-            });
-            window._eliminarModo = null;
-        } else {
-            await fetch(`${urlBase}/${_articulo_id_eliminar}`, {
-                method: 'DELETE',
-                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
-            });
-        }
-        location.reload();
-    }
-
-    // ==================== SELECCIÓN LOTE ====================
-    function toggleTodos(el) {
-        document.querySelectorAll('.check-articulo').forEach(c => c.checked = el.checked);
-        actualizarBtnLote();
-    }
-    function actualizarBtnLote() {
-        const seleccionados = document.querySelectorAll('.check-articulo:checked').length;
-        const btn = document.getElementById('btn-eliminar-lote');
-        btn.classList.toggle('hidden', seleccionados === 0);
-        btn.textContent = `Eliminar seleccionados (${seleccionados})`;
-    }
-    async function eliminarLote() {
-        const ids = [...document.querySelectorAll('.check-articulo:checked')].map(c => parseInt(c.value));
-        if (!ids.length) return;
-        if (!confirm(`¿Eliminar ${ids.length} artículo(s)? Esta acción no se puede deshacer.`)) return;
-        const res  = await fetch('{{ route('admin.articulos.destroy-lote') }}', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
-            body: JSON.stringify({ ids }),
-        });
-        const data = await res.json();
-        location.reload();
-    }
-
-    // ==================== TOGGLE GRUPO ====================
-    function toggleGrupo(gid) {
-        const filas = document.querySelectorAll(`.grupo-${gid}`);
-        const icono = document.getElementById(`icon-${gid}`);
-        const estaOculto = filas[0]?.classList.contains('hidden');
-
-        // Mostrar u ocultar filas hijas
-        filas.forEach(f => f.classList.toggle('hidden', !estaOculto));
-        if (icono) icono.style.transform = estaOculto ? 'rotate(90deg)' : 'rotate(0deg)';
-
-        if (estaOculto) {
-            // Cerrar cualquier otro grupo abierto antes de abrir este
-            document.querySelectorAll('tbody tr[onclick^="toggleGrupo"]').forEach(tr => {
-                const onclickVal = tr.getAttribute('onclick');
-                const otroGid = onclickVal.match(/toggleGrupo\('(.+?)'\)/)?.[1];
-                if (otroGid && otroGid !== gid) {
-                    const otrasFilas = document.querySelectorAll(`.grupo-${otroGid}`);
-                    const estaAbierto = !otrasFilas[0]?.classList.contains('hidden');
-                    if (estaAbierto) toggleGrupo(otroGid);
+                        window.location.reload();
+                    } catch (e) {
+                        this.error = 'Error al guardar los cambios.';
+                        this.guardando = false;
+                    }
                 }
-            });
-            // Scroll hasta la fila cabecera
-            const filaCabecera = document.querySelector(`tr[onclick="toggleGrupo('${gid}')"]`);
-            if (filaCabecera) {
-                setTimeout(() => {
-                    filaCabecera.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }, 50);
             }
-
-            // Atenuar todas las filas que NO pertenecen a este grupo
-            document.querySelectorAll('tbody tr').forEach(tr => {
-                const esHija   = tr.classList.contains(`grupo-${gid}`);
-                const esCabecera = tr.getAttribute('onclick') === `toggleGrupo('${gid}')`;
-                if (!esHija && !esCabecera) {
-                    tr.classList.add('opacity-30', 'transition-opacity', 'duration-300');
-                }
-            });
-
-            // Resaltar la cabecera abierta
-            filaCabecera?.classList.add('ring-1', 'ring-primary/30');
-
-        } else {
-            // Al cerrar: quitar atenuación de todas las filas
-            document.querySelectorAll('tbody tr').forEach(tr => {
-                tr.classList.remove('opacity-30', 'transition-opacity', 'duration-300');
-            });
-
-            const filaCabecera = document.querySelector(`tr[onclick="toggleGrupo('${gid}')"]`);
-            filaCabecera?.classList.remove('ring-1', 'ring-primary/30');
         }
-    }
 
-    // ==================== ELIMINAR GRUPO ====================
-    function confirmarEliminarGrupo(ids, folio) {
-        _ids_lote = ids;
-        document.getElementById('modal-eliminar').querySelector('p').textContent =
-            `Se eliminarán todos los artículos del folio "${folio}" que no tengan relaciones activas. Esta acción no se puede deshacer.`;
-        document.getElementById('modal-eliminar').showModal();
-        // Sobreescribir temporalmente ejecutarEliminar para este caso
-        window._eliminarModo = 'lote';
-        window._lote_ids = ids;
-    }
-
-    // Extrae la parte numérica final de la serie (sin prefijo)
-    function autoSerieNumerico() {
-        const serie = document.getElementById('f-serie').value.trim();
-        const match = serie.match(/(\d+)$/);
-        document.getElementById('f-serie-numerico').value = match ? match[1] : '';
-    }
-
-    function toggleGrupoMobile(gid) {
-        const contenedor = document.getElementById(`grupo-mobile-${gid}`);
-        const icono = document.getElementById(`icon-mobile-${gid}`);
-        const estaOculto = contenedor.classList.contains('hidden');
-
-        // Cerrar cualquier otro grupo abierto
-        document.querySelectorAll('[id^="grupo-mobile-"]').forEach(el => {
-            if (el.id !== `grupo-mobile-${gid}` && !el.classList.contains('hidden')) {
-                el.classList.add('hidden');
-                const otroGid = el.id.replace('grupo-mobile-', '');
-                const otroIcono = document.getElementById(`icon-mobile-${otroGid}`);
-                if (otroIcono) otroIcono.style.transform = 'rotate(0deg)';
+        function seleccionArticulos() {
+            return {
+                seleccionados: [],
+                toggleTodos(e) {
+                    document.querySelectorAll('.row-check:not(:disabled)').forEach(cb => {
+                        cb.checked = e.target.checked;
+                        cb.dispatchEvent(new Event('change'));
+                    });
+                },
+                toggleFila(e) {
+                    const ids = e.target.value.split(',').map(Number);
+                    if (e.target.checked) {
+                        this.seleccionados = [...new Set([...this.seleccionados, ...ids])];
+                    } else {
+                        this.seleccionados = this.seleccionados.filter(id => !ids.includes(id));
+                    }
+                },
+                eliminarSeleccionados() {
+                    const ids = this.seleccionados;
+                    window.dispatchEvent(new CustomEvent('pin-confirm', {
+                        detail: {
+                            callback: async () => {
+                                const res = await fetch("{{ route('admin.articulos.destroy-lote') }}", {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                                        'Accept': 'application/json',
+                                    },
+                                    body: JSON.stringify({ ids }),
+                                });
+                                const data = await res.json();
+                                if (data.success) {
+                                    window.location.reload();
+                                }
+                            }
+                        }
+                    }));
+                }
             }
+        }
+
+        // ==================== ALTA INDIVIDUAL Y RANGO ====================
+        const csrfToken = '{{ csrf_token() }}';
+        const urlStore  = '{{ route('admin.articulos.store') }}';
+        const urlRango  = '{{ route('admin.articulos.rango') }}';
+
+        async function guardarIndividual() {
+            const error = document.getElementById('individual-error');
+            error.classList.add('hidden');
+
+            const payload = {
+                FOLIO:          document.getElementById('i-folio').value.trim(),
+                SERIE:          document.getElementById('i-serie').value.trim(),
+                NOMBRE:         document.getElementById('i-nombre').value.trim(),
+                FORMATO:        document.getElementById('i-formato').value.trim(),
+                TIPO:           document.getElementById('i-tipo').value,
+                COSTO_UNITARIO: document.getElementById('i-costo').value,
+                PRECIO_VENTA:   document.getElementById('i-precio').value,
+                CANTIDAD_ALMACEN: parseInt(document.getElementById('i-cantidad').value) || 1,
+                ID_TIPO_EXAMEN: document.getElementById('i-tipo-examen').value || null,
+            };
+
+            const btn = document.getElementById('btn-guardar-individual');
+            const textoOriginal = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = `<span class="loading loading-spinner loading-xs"></span> Agregando a inventario...`;
+
+            try {
+                const res = await fetch(urlStore, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+                    body: JSON.stringify(payload),
+                });
+                const data = await res.json().catch(() => ({}));
+
+                if (!res.ok || !data.success) {
+                    error.textContent = data.message ?? 'Error al guardar.';
+                    error.classList.remove('hidden');
+                    return;
+                }
+
+                document.getElementById('modal-individual').close();
+                mostrarInforme({
+                    resumen: `Se agregó correctamente el artículo con ID Item <strong>${data.id_item}</strong>.`,
+                });
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = textoOriginal;
+            }
+        }
+
+        function actualizarPreviewRango() {
+            const inicial = document.getElementById('r-serie-inicial').value.trim().toUpperCase();
+            const final   = document.getElementById('r-serie-final').value.trim().toUpperCase();
+            const preview = document.getElementById('preview-rango');
+            const patron  = /^S(\d{9})(?:-\d+)?$/;
+            const mInicial = inicial.match(patron);
+            const mFinal   = final.match(patron);
+
+            if (!mInicial || !mFinal) { preview.textContent = ''; return; }
+
+            const nInicial = parseInt(mInicial[1]);
+            const nFinal   = parseInt(mFinal[1]);
+            if (nFinal < nInicial) { preview.textContent = 'El folio final debe ser mayor o igual al inicial.'; return; }
+
+            const total = nFinal - nInicial + 1;
+            preview.textContent = `Se generarán ${total} folios: S${mInicial[1]} → S${mFinal[1]}`;
+        }
+        ['r-serie-inicial', 'r-serie-final'].forEach(id => {
+            document.getElementById(id)?.addEventListener('input', actualizarPreviewRango);
         });
 
-        contenedor.classList.toggle('hidden', !estaOculto);
-        if (icono) icono.style.transform = estaOculto ? 'rotate(90deg)' : 'rotate(0deg)';
+        async function guardarRango() {
+            const error = document.getElementById('rango-error');
+            error.classList.add('hidden');
 
-        if (estaOculto) {
-            setTimeout(() => {
-                const cabecera = contenedor.closest('.grupo-mobile-card');
-                if (cabecera) {
-                    const y = cabecera.getBoundingClientRect().top + window.scrollY - 80;
-                    window.scrollTo({ top: y, behavior: 'smooth' });
+            const payload = {
+                FOLIO:          document.getElementById('r-folio').value.trim(),
+                SERIE_INICIAL:  document.getElementById('r-serie-inicial').value.trim(),
+                SERIE_FINAL:    document.getElementById('r-serie-final').value.trim(),
+                NOMBRE:         document.getElementById('r-nombre').value.trim(),
+                FORMATO:        document.getElementById('r-formato').value.trim(),
+                TIPO:           document.getElementById('r-tipo').value,
+                COSTO_UNITARIO: document.getElementById('r-costo').value,
+                PRECIO_VENTA:   document.getElementById('r-precio').value,
+                ID_TIPO_EXAMEN: document.getElementById('r-tipo-examen').value || null,
+            };
+
+            const btn = document.getElementById('btn-guardar-rango');
+            const textoOriginal = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = `<span class="loading loading-spinner loading-xs"></span> Agregando a inventario...`;
+
+            try {
+                const res = await fetch(urlRango, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+                    body: JSON.stringify(payload),
+                });
+                const data = await res.json().catch(() => ({}));
+
+                if (!res.ok || !data.success) {
+                    error.textContent = data.message ?? 'Error al guardar.';
+                    error.classList.remove('hidden');
+                    return;
                 }
-            }, 50);
-        }
-    }
 
-    function verDetalleCantidades(folio, almacen, solicitudes, destruccion, perdidos) {
-        document.getElementById('detalle-folio').textContent = folio;
-        document.getElementById('detalle-almacen').textContent = almacen;
-        document.getElementById('detalle-solicitudes').textContent = solicitudes;
-        document.getElementById('detalle-destruccion').textContent = destruccion;
-        document.getElementById('detalle-perdidos').textContent = perdidos;
-        document.getElementById('modal-detalle-cantidades').showModal();
-    }
-</script>
+                document.getElementById('modal-rango').close();
+                mostrarInforme({
+                    resumen: `ID Item: <strong>${data.id_item}</strong>`,
+                    agregados: data.agregados,
+                    existentes: data.existentes,
+                });
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = textoOriginal;
+            }
+        }
+
+        function mostrarInforme({ resumen, agregados = null, existentes = null }) {
+            const contenedor = document.getElementById('informe-contenido');
+            let html = `<p>${resumen}</p>`;
+
+            if (agregados) {
+                html += `<div class="alert alert-success"><span>${agregados.length} folio(s) agregados correctamente.</span></div>`;
+            }
+            if (existentes && existentes.length) {
+                html += `<div class="alert alert-warning"><span>${existentes.length} folio(s) no se agregaron porque ya existían: ${existentes.join(', ')}</span></div>`;
+            }
+
+            contenedor.innerHTML = html;
+            document.getElementById('modal-informe').showModal();
+        }
+    </script>
 </x-app-layout>

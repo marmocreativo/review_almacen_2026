@@ -94,12 +94,6 @@
                         </a>
                     </li>
                     <li>
-                        <a href="{{ route('admin.cobranza.index') }}" class="{{ request()->routeIs('admin.cobranza*') ? 'active' : '' }}">
-                            <x-heroicon-o-banknotes class="w-5 h-5 flex-shrink-0" />
-                            Cobranza
-                        </a>
-                    </li>
-                    <li>
                         <a href="{{ route('admin.destruccion.index') }}" class="{{ request()->routeIs('admin.destruccion*') ? 'active' : '' }}">
                             <x-heroicon-o-trash class="w-5 h-5 flex-shrink-0" />
                             Destrucción
@@ -111,7 +105,7 @@
                     <li>
                         <a href="{{ route('admin.empresas.index') }}" class="{{ request()->routeIs('admin.empresas*') ? 'active' : '' }}">
                             <x-heroicon-o-building-office-2 class="w-5 h-5 flex-shrink-0" />
-                            Empresas
+                            Clientes
                         </a>
                     </li>
                     <li>
@@ -164,19 +158,21 @@
 
             {{-- ===================== SIDEBAR DESKTOP ===================== --}}
             <aside
-                class="hidden lg:flex flex-col fixed top-0 left-0 h-screen bg-primary border-r border-primary/20 z-40 transition-all duration-300 ease-in-out"
+                class="hidden lg:flex flex-col fixed top-0 left-0 h-screen bg-secondary border-r border-secondary/20 z-40 transition-all duration-300 ease-in-out"
                 :class="collapsed ? 'w-16' : 'w-64'">
 
                 {{-- Logo / Collapse --}}
-                <div class="flex items-center bg-white border-b border-base-300 h-16 px-3 gap-2 overflow-hidden">
-                    <button @click="collapsed = !collapsed" class="btn btn-ghost btn-square btn-sm flex-shrink-0">
+                <div class="flex items-center bg-black/50 border-b border-base-300 h-16 px-3 gap-2 overflow-hidden">
+                    <button @click="collapsed = !collapsed" class="btn btn-border-white btn-square btn-sm flex-shrink-0">
                         <x-heroicon-o-bars-3 class="w-5 h-5" />
                     </button>
-                    <a x-show="!collapsed" x-transition.opacity href="{{ route('dashboard') }}" class="truncate">
-                        <img src="{{ asset('images/logo_menu.svg') }}" alt="{{ config('app.name') }}" class="h-12 w-auto">
+                    <a href="{{ route('dashboard') }}" class="truncate">
+                        <img x-show="!collapsed" x-transition.opacity
+                            src="{{ asset('images/logo_letras_blanco.svg') }}" alt="{{ config('app.name') }}" class="h-12 w-auto">
+                        <img x-show="collapsed" x-transition.opacity
+                            src="{{ asset('images/logo_rq_blanco.svg') }}" alt="{{ config('app.name') }}" class="h-10 w-auto">
                     </a>
                 </div>
-
                 {{-- Nav desktop --}}
                 <ul class="menu flex-1 px-2 py-4 gap-1 overflow-y-auto overflow-x-hidden
                     [&_a]:text-primary-content [&_a]:hover:bg-primary-content/20
@@ -242,15 +238,6 @@
                         </a>
                     </li>
                     <li>
-                        <a href="{{ route('admin.cobranza.index') }}"
-                            class="{{ request()->routeIs('admin.cobranza*') ? 'active' : '' }}"
-                            :class="collapsed ? 'justify-center' : ''"
-                            :title="collapsed ? 'Cobranza' : ''">
-                            <x-heroicon-o-banknotes class="w-5 h-5 flex-shrink-0" />
-                            <span x-show="!collapsed" x-transition.opacity class="truncate">Cobranza</span>
-                        </a>
-                    </li>
-                    <li>
                         <a href="{{ route('admin.destruccion.index') }}"
                             class="{{ request()->routeIs('admin.destruccion*') ? 'active' : '' }}"
                             :class="collapsed ? 'justify-center' : ''"
@@ -267,9 +254,9 @@
                         <a href="{{ route('admin.empresas.index') }}"
                             class="{{ request()->routeIs('admin.empresas*') ? 'active' : '' }}"
                             :class="collapsed ? 'justify-center' : ''"
-                            :title="collapsed ? 'Empresas' : ''">
+                            :title="collapsed ? 'Clientes' : ''">
                             <x-heroicon-o-building-office-2 class="w-5 h-5 flex-shrink-0" />
-                            <span x-show="!collapsed" x-transition.opacity class="truncate">Empresas</span>
+                            <span x-show="!collapsed" x-transition.opacity class="truncate">Clientes</span>
                         </a>
                     </li>
                     <li>
@@ -356,7 +343,7 @@
 
                 {{-- Page heading --}}
                 @isset($header)
-                    <div class="bg-base-100 border-b border-base-300 px-4 md:px-6 py-4">
+                    <div class="px-4 md:px-6 py-4">
                         {{ $header }}
                     </div>
                 @endisset
@@ -396,5 +383,6 @@
 
             </div>
         </nav>
+        <x-pin-confirm-modal />
     </body>
 </html>

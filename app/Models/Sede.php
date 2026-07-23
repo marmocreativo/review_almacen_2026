@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Sede extends Model
@@ -26,8 +27,10 @@ class Sede extends Model
         return $this->belongsTo(Empresa::class, 'id_empresa');
     }
 
-    public function contactos(): HasMany
+    public function contactos(): BelongsToMany
     {
-        return $this->hasMany(Contacto::class, 'id_sede');
+        return $this->belongsToMany(Contacto::class, 'contacto_sede', 'id_sede', 'id_contacto');
     }
+
+    
 }

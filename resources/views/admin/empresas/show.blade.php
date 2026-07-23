@@ -111,19 +111,55 @@
                                     @endforeach
                                 </div>
                             @else
-                                <p class="text-xs text-base-content/40 mt-2">Sin contactos registrados.</p>
+                                <p class="text-xs text-base-content/40 mt-2">Sin contactos asignados.</p>
                             @endif
 
                             <div class="flex gap-2 mt-3">
                                 <a href="{{ route('admin.empresas.sedes.edit', [$empresa, $sede]) }}"
                                     class="btn btn-ghost btn-xs">Editar sede</a>
-                                <a href="{{ route('admin.empresas.sedes.contactos.index', [$empresa, $sede]) }}"
-                                    class="btn btn-ghost btn-xs">Contactos</a>
                             </div>
                         </div>
                     </div>
                 @empty
                     <p class="text-sm text-base-content/50 text-center py-4">No hay sedes registradas.</p>
+                @endforelse
+            </div>
+        </div>
+
+        {{-- Contactos del cliente --}}
+        <div class="card bg-base-100 shadow">
+            <div class="card-body">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="card-title text-base">Contactos</h3>
+                    <a href="{{ route('admin.empresas.contactos.index', $empresa) }}"
+                        class="btn btn-ghost btn-xs gap-1">
+                        <x-heroicon-o-arrow-top-right-on-square class="w-3.5 h-3.5" />
+                        Ver todos
+                    </a>
+                </div>
+
+                @forelse($empresa->contactos()->with('sedes')->latest()->take(5)->get() as $contacto)
+                    <div class="flex items-center justify-between py-2 border-b border-base-300 last:border-0 text-sm">
+                        <div class="min-w-0">
+                            <p class="font-medium truncate">{{ $contacto->nombre }} {{ $contacto->apellidos }}</p>
+                            <p class="text-xs text-base-content/50 truncate">
+                                {{ $contacto->correo ?? '—' }} @if($contacto->telefono) · {{ $contacto->telefono }} @endif
+                            </p>
+                            @if($contacto->sedes->count())
+                                <div class="flex flex-wrap gap-1 mt-1">
+                                    @foreach($contacto->sedes as $sedeContacto)
+                                        <span class="badge badge-ghost badge-xs">{{ $sedeContacto->nombre }}</span>
+                                    @endforeach
+                                </div>
+                            @endif
+                        </div>
+                        <a href="{{ route('admin.empresas.contactos.edit', [$empresa, $contacto]) }}"
+                            class="btn btn-ghost btn-xs btn-square shrink-0">
+                            <x-heroicon-o-pencil class="w-3.5 h-3.5" />
+                        </a>
+                    </div>
+                @empty
+                    <p class="text-sm text-base-content/50 text-center py-4">No hay contactos registrados.</p>
                 @endforelse
             </div>
         </div>
