@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Caja;
 use App\Models\SolicitudArticulo;
+use App\Models\Bitacora;
 use Illuminate\Http\Request;
 
 class AdminDestruccionController extends Controller
@@ -70,6 +71,12 @@ class AdminDestruccionController extends Controller
         if (!$caja->estaCerrada()) {
             return back()->with('error', 'Solo se pueden marcar como destruidas las cajas cerradas.');
         }
+
+        Bitacora::registrar('destruccion', 'marcar_destruida',
+            "Marcó como destruida la caja {$caja->NOMBRE}",
+            $caja->ID,
+            ['caja' => $caja->NOMBRE, 'articulos' => $caja->articulos()->count()]
+        );
 
         $caja->update(['FECHA_DESTRUIDA' => now()]);
 

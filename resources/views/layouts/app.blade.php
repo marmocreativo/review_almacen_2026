@@ -132,6 +132,12 @@
                             Importación
                         </a>
                     </li>
+                    <li>
+                        <a href="{{ route('admin.bitacora.index') }}" class="{{ request()->routeIs('admin.bitacora*') ? 'active' : '' }}">
+                            <x-heroicon-o-document-magnifying-glass class="w-5 h-5 flex-shrink-0" />
+                            Bitácora
+                        </a>
+                    </li>
                 </ul>
                 {{-- Usuario offcanvas --}}
                 <div class="border-t border-primary/20 p-3">
@@ -297,6 +303,15 @@
                             <span x-show="!collapsed" x-transition.opacity class="truncate">Importación</span>
                         </a>
                     </li>
+                    <li>
+                        <a href="{{ route('admin.bitacora.index') }}"
+                            class="{{ request()->routeIs('admin.bitacora*') ? 'active' : '' }}"
+                            :class="collapsed ? 'justify-center' : ''"
+                            :title="collapsed ? 'Bitácora' : ''">
+                            <x-heroicon-o-document-magnifying-glass class="w-5 h-5 flex-shrink-0" />
+                            <span x-show="!collapsed" x-transition.opacity class="truncate">Bitácora</span>
+                        </a>
+                    </li>
                 </ul>
 
                 {{-- Usuario desktop --}}
@@ -326,7 +341,7 @@
             </aside>
 
             {{-- ===================== CONTENIDO PRINCIPAL ===================== --}}
-            <div class="flex flex-col flex-1 min-w-0 transition-all duration-300 ease-in-out lg:ml-64"
+            <div class="flex flex-col flex-1 min-w-0 transition-all duration-300 ease-in-out"
                 :class="collapsed ? 'lg:ml-16' : 'lg:ml-64'">
 
                 {{-- Navbar móvil --}}

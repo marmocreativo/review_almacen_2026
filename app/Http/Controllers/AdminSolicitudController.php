@@ -12,10 +12,14 @@ use App\Models\SolicitudExamen;
 use App\Models\SolicitudPago;
 use App\Models\TipoExamen;
 use App\Models\Caja;
+use App\Models\Bitacora;
 use Illuminate\Support\Facades\Storage;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use PhpOffice\PhpWord\PhpWord;
+use PhpOffice\PhpWord\SimpleType\Jc;
+use PhpOffice\PhpWord\Style\Font;
 
 class AdminSolicitudController extends Controller
 {
@@ -918,7 +922,9 @@ class AdminSolicitudController extends Controller
             }
         }
 
-        DB::transaction(function () use ($request, $solicitud, $cajaElegida) {
+        $resumen = [];
+
+        DB::transaction(function () use ($request, $solicitud, $cajaElegida, &$resumen) {
             $cajaParaDestruccion = $cajaElegida;
 
             foreach ($request->items as $itemData) {
@@ -969,8 +975,26 @@ class AdminSolicitudController extends Controller
                     $articulo->increment('CANTIDAD_PERDIDOS', $aPerdidos);
                     $articulo->decrement('CANTIDAD_SOLICITUDES', $cantidad);
                 }
+
+                $resumen[] = ($articulo?->FOLIO ?? "ID {$sa->ID_ARTICULO}")
+                    . ($articulo?->SERIE ? " ({$articulo->SERIE})" : '')
+                    . " → {$estado}";
             }
         });
+
+        if (!empty($resumen)) {
+            Bitacora::registrar('solicitudes', 'procesar_devolucion',
+                "Procesó devolución de " . count($resumen) . " artículo(s) de la solicitud #{$solicitud->ID_SOLICITUD}"
+                    . ($solicitud->empresa ? " de {$solicitud->empresa->nombre}" : ''),
+                $solicitud->ID_SOLICITUD,
+                [
+                    'id_solicitud' => $solicitud->ID_SOLICITUD,
+                    'cliente'      => $solicitud->empresa?->nombre ?? 'Sin cliente',
+                    'total'        => count($resumen),
+                    'items'        => array_slice($resumen, 0, 20), // cap para no inflar el JSON en devoluciones grandes
+                ]
+            );
+        }
 
         return redirect()->route('admin.solicitudes.devolucion.show', $solicitud->ID_SOLICITUD)
             ->with('success', 'Devolución procesada correctamente.');
@@ -999,6 +1023,17 @@ private function obtenerCajaAbierta(): Caja
     // ── DESTROY ──
     public function destroy(Solicitud $solicitud)
     {
+        Bitacora::registrar('solicitudes', 'eliminar',
+            "Eliminó la solicitud #{$solicitud->ID_SOLICITUD}" . ($solicitud->empresa ? " de {$solicitud->empresa->nombre}" : ''),
+            $solicitud->ID_SOLICITUD,
+            [
+                'id_solicitud' => $solicitud->ID_SOLICITUD,
+                'cliente'      => $solicitud->empresa?->nombre ?? 'Sin cliente',
+                'sede'         => $solicitud->sede?->nombre,
+                'estado'       => $solicitud->ESTADO_SOLICITUD,
+            ]
+        );
+
         DB::transaction(function () use ($solicitud) {
             foreach ($solicitud->articulos as $item) {
                 $articulo = Articulo::find($item->ID_ARTICULO);
@@ -1079,6 +1114,88 @@ private function obtenerCajaAbierta(): Caja
 
         return $pdf->download("solicitud-{$solicitud->ID_SOLICITUD}.pdf");
     }
+
+    // ── GENERAR CARTA DE ENVÍO EN WORD ──
+public function generarCartaWord(Solicitud $solicitud)
+{
+    $solicitud->load(['empresa', 'sede', 'contacto', 'examenes.articulos']);
+
+    \PhpOffice\PhpWord\Settings::setOutputEscapingEnabled(true);
+
+    $phpWord = new \PhpOffice\PhpWord\PhpWord();
+    $phpWord->setDefaultFontName('Calibri');
+    $phpWord->setDefaultFontSize(11);
+
+    $section = $phpWord->addSection();
+
+    $fechaBase = $solicitud->ENVIO_FECHA_ENVIO ?: $solicitud->FECHA_SOLICITUD;
+    $fecha = $fechaBase ? \Carbon\Carbon::parse($fechaBase)->format('d/m/Y') : now()->format('d/m/Y');
+
+    $nombreContacto = trim(($solicitud->contacto?->nombre ?? '') . ' ' . ($solicitud->contacto?->apellidos ?? ''));
+    $nombreContacto = $nombreContacto ?: $solicitud->RESPONSABLE_NOMBRE;
+    $nombreEmpresa  = $solicitud->empresa?->nombre ?: '';
+
+    $nombreExamen = $solicitud->ENVIO_EXAMEN ?: '(sin especificar)';
+
+    $series = $solicitud->examenes
+        ->flatMap->articulos
+        ->pluck('SERIE')
+        ->filter()
+        ->unique()
+        ->values();
+
+    $foliosMaterial = $series->isNotEmpty() ? $series->implode(', ') : '(sin folios)';
+    $foliosAudio    = $solicitud->ENVIO_FOLIOS_AUDIO ?: '(sin especificar)';
+    $numeroHojas    = $solicitud->ENVIO_NUMERO_HOJAS ?? '(sin especificar)';
+    $diasPermitido  = $solicitud->ENVIO_DIAS_PERMITIDO ?? '(sin especificar)';
+
+    $section->addText($fecha);
+    $section->addTextBreak(1);
+
+    $section->addText('Para: ' . $nombreContacto);
+    $section->addText($nombreEmpresa);
+    $section->addTextBreak(1);
+
+    $section->addText('Por medio de la presente confirmamos el envio del material correspondiente a su solicitud de examen ' . $nombreExamen . ', con los siguientes detalles:');
+    $section->addTextBreak(1);
+
+    $section->addText('Folios de material: ' . $foliosMaterial);
+    $section->addText('Folios de audio: ' . $foliosAudio);
+    $section->addText('Folios de hojas de respuesta: ' . $numeroHojas);
+    $section->addText('Fecha de envio: ' . $fecha);
+    $section->addText('Dias permitidos de resguardo: ' . $diasPermitido);
+    $section->addTextBreak(1);
+
+    $section->addText('Le solicitamos custodiar el material y devolverlo dentro del plazo indicado. Cualquier duda quedamos a sus ordenes.');
+    $section->addTextBreak(2);
+
+    $section->addText('Atentamente,');
+    $section->addText('Departamento de Operaciones');
+
+    $filename = "carta-envio-solicitud-{$solicitud->ID_SOLICITUD}.docx";
+
+    if (!is_dir(storage_path('app/temp'))) {
+        mkdir(storage_path('app/temp'), 0755, true);
+    }
+
+    $tempPath = storage_path('app/temp/' . uniqid('carta_') . '.docx');
+
+    $writer = \PhpOffice\PhpWord\IOFactory::createWriter($phpWord, 'Word2007');
+    $writer->save($tempPath);
+
+    // Descartar cualquier salida previa (BOM, espacios, warnings) que corrompa el binario
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+
+    return response()->download($tempPath, $filename, [
+        'Content-Type'        => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'Content-Length'      => filesize($tempPath),
+        'Cache-Control'       => 'no-store, no-cache, must-revalidate',
+        'Pragma'              => 'public',
+        'X-Accel-Buffering'   => 'no',
+    ])->deleteFileAfterSend(true);
+}
 
     // ── ENVIAR EMAIL ──
     public function enviarEmail(Request $request, Solicitud $solicitud)

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Articulo;
 use App\Models\TipoExamen;
+use App\Models\Bitacora;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
@@ -546,6 +547,12 @@ class AdminArticuloController extends Controller
             return back()->with('error', 'No se puede eliminar: el artículo tiene relaciones activas.');
         }
 
+        Bitacora::registrar('articulos', 'eliminar',
+            "Eliminó el artículo {$articulo->FOLIO}" . ($articulo->SERIE ? " ({$articulo->SERIE})" : ''),
+            $articulo->ID_ARTICULO,
+            ['folio' => $articulo->FOLIO, 'serie' => $articulo->SERIE, 'nombre' => $articulo->NOMBRE]
+        );
+
         $articulo->delete();
 
         return redirect()->route('admin.articulos.index')
@@ -557,12 +564,25 @@ class AdminArticuloController extends Controller
         $request->validate(['ids' => 'required|array', 'ids.*' => 'integer']);
 
         $eliminados = 0;
+        $folios = [];
         foreach ($request->ids as $id) {
             $articulo = Articulo::find($id);
             if ($articulo && $articulo->esDeletable()) {
+                $folios[] = $articulo->FOLIO . ($articulo->SERIE ? " ({$articulo->SERIE})" : '');
                 $articulo->delete();
                 $eliminados++;
             }
+        }
+
+        if ($eliminados > 0) {
+            Bitacora::registrar('articulos', 'eliminar_lote',
+                "Eliminó {$eliminados} artículo(s) en lote",
+                null,
+                [
+                    'total'  => $eliminados,
+                    'folios' => array_slice($folios, 0, 20), // cap para no inflar el JSON en lotes enormes
+                ]
+            );
         }
 
         return response()->json(['success' => true, 'eliminados' => $eliminados]);

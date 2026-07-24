@@ -167,20 +167,24 @@ class AdminImportacionController extends Controller
             );
 
             if (!empty($contactoNombre)) {
-                $yaExiste = Contacto::where('id_sede', $sede->id)
+                $contacto = Contacto::where('id_empresa', $empresa->id)
                     ->where('nombre', trim($contactoNombre))
                     ->where('apellidos', $contactoApellidos ?? '')
-                    ->exists();
+                    ->first();
 
-                if (!$yaExiste) {
-                    Contacto::create([
-                        'id_sede'   => $sede->id,
-                        'nombre'    => trim($contactoNombre),
-                        'apellidos' => $contactoApellidos ?? '',
-                        'telefono'  => $contactoTelefono ?? '',
-                        'correo'    => $contactoCorreo ?? '',
+                if (!$contacto) {
+                    $contacto = Contacto::create([
+                        'id_empresa' => $empresa->id,
+                        'nombre'     => trim($contactoNombre),
+                        'apellidos'  => $contactoApellidos ?? '',
+                        'telefono'   => $contactoTelefono ?? '',
+                        'correo'     => $contactoCorreo ?? '',
+                        'pin'        => Contacto::generarPinUnico(),
                     ]);
                 }
+
+                // Adjunta la sede al contacto sin duplicar (many-to-many)
+                $contacto->sedes()->syncWithoutDetaching([$sede->id]);
             }
 
             $agregados[] = "{$nombreEmpresa} / {$nombreSede}" . ($contactoNombre ? " / {$contactoNombre}" : '');

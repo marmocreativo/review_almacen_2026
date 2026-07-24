@@ -14,6 +14,7 @@ use App\Http\Controllers\AdminUsuarioController;
 use App\Http\Controllers\AdminRolController;
 use App\Http\Controllers\PinController;
 use App\Http\Controllers\PortalSolicitudController;
+use App\Http\Controllers\AdminBitacoraController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -39,6 +40,8 @@ Route::middleware('auth')->group(function () {
     Route::prefix('admin')->name('admin.')->group(function () {
 
         Route::resource('roles', AdminRolController::class);
+
+        Route::get('bitacora', [AdminBitacoraController::class, 'index'])->name('bitacora.index');
 
         Route::get('usuarios', [AdminUsuarioController::class, 'index'])->name('usuarios.index');
         Route::get('usuarios/crear', [AdminUsuarioController::class, 'create'])->name('usuarios.create');
@@ -135,6 +138,7 @@ Route::middleware('auth')->group(function () {
 
         // ── PDF / Email (se mantienen) ──
         Route::get('solicitudes/{solicitud}/pdf', [AdminSolicitudController::class, 'generarPdf'])->name('solicitudes.pdf');
+        Route::get('solicitudes/{solicitud}/carta', [AdminSolicitudController::class, 'generarCartaWord'])->name('solicitudes.carta');
         Route::post('solicitudes/{solicitud}/email', [AdminSolicitudController::class, 'enviarEmail'])->name('solicitudes.email');
 
         Route::get('importacion', [AdminImportacionController::class, 'index'])->name('importacion.index');

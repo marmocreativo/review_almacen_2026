@@ -25,6 +25,7 @@ class SolicitudArticulo extends Model
         'CANTIDAD_PERDIDOS',
         'CANTIDAD_COBRAR',
         'UBICACION_DESTRUCCION',
+        'ID_CAJA',
         'RAZON_PERDIDA',
         'FECHA_RETORNO',
         'PRECIO_VENTA',

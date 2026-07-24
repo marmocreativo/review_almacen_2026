@@ -16,6 +16,10 @@
                 @endphp
                 <span class="badge {{ $badge }}">{{ ucfirst($solicitud->ESTADO_SOLICITUD) }}</span>
             </div>
+            <a href="{{ route('admin.solicitudes.carta', $solicitud) }}" class="btn btn-outline btn-sm gap-1">
+                <x-heroicon-o-document-arrow-down class="w-4 h-4" />
+                Carta de envío (Word)
+            </a>
             @if($solicitud->isPendiente())
                 <form method="POST" action="{{ route('admin.solicitudes.estado', $solicitud) }}">
                     @csrf @method('PATCH')
