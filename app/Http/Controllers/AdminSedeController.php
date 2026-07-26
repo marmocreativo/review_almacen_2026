@@ -35,7 +35,11 @@ class AdminSedeController extends Controller
         ]);
 
         $validated['id_empresa'] = $empresa->id;
-        Sede::create($validated);
+        $sede = Sede::create($validated);
+
+        if ($request->wantsJson()) {
+            return response()->json(['success' => true, 'sede' => $sede]);
+        }
 
         return redirect()->route('admin.empresas.sedes.index', $empresa)
             ->with('success', 'Sede creada correctamente.');
@@ -68,14 +72,28 @@ class AdminSedeController extends Controller
 
         $sede->update($validated);
 
+        if ($request->wantsJson()) {
+            return response()->json(['success' => true, 'sede' => $sede]);
+        }
+
         return redirect()->route('admin.empresas.sedes.index', $empresa)
             ->with('success', 'Sede actualizada correctamente.');
     }
 
-    public function destroy(Empresa $empresa, Sede $sede)
+    public function destroy(Request $request, Empresa $empresa, Sede $sede)
     {
         $sede->delete();
+
+        if ($request->wantsJson()) {
+            return response()->json(['success' => true]);
+        }
+
         return redirect()->route('admin.empresas.sedes.index', $empresa)
             ->with('success', 'Sede eliminada correctamente.');
+    }
+    public function json(Empresa $empresa)
+    {
+        $sedes = $empresa->sedes()->withCount('contactos')->get();
+        return response()->json($sedes);
     }
 }

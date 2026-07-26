@@ -54,6 +54,8 @@ Route::middleware('auth')->group(function () {
         Route::resource('empresas', AdminEmpresaController::class);
         Route::resource('empresas.sedes', AdminSedeController::class);
         Route::resource('empresas.contactos', AdminContactoController::class);
+        Route::get('empresas/{empresa}/sedes-json', [AdminSedeController::class, 'json'])->name('empresas.sedes.json');
+        Route::get('empresas/{empresa}/contactos-json', [AdminContactoController::class, 'json'])->name('empresas.contactos.json');
         Route::resource('tipo-examenes', AdminTipoExamenController::class, [
             'parameters' => ['tipo-examenes' => 'tipoExamen']
         ]);
@@ -164,11 +166,12 @@ Route::middleware('auth')->group(function () {
 Route::prefix('portal')->name('portal.')->group(function () {
     Route::get('/', [PortalSolicitudController::class, 'login'])->name('login');
     Route::post('/verificar', [PortalSolicitudController::class, 'verificarPin'])->name('verificar');
+    Route::post('/salir', [PortalSolicitudController::class, 'salir'])->name('salir');
+
+    Route::get('/solicitudes', [PortalSolicitudController::class, 'historial'])->name('solicitudes.historial');
+    Route::get('/solicitudes/crear', [PortalSolicitudController::class, 'create'])->name('solicitudes.create');
     Route::post('/solicitudes', [PortalSolicitudController::class, 'store'])->name('solicitudes.store');
-    Route::get('/solicitudes/{solicitud}/examenes', [PortalSolicitudController::class, 'examenes'])->name('solicitudes.examenes');
-    Route::post('/solicitudes/{solicitud}/examenes', [PortalSolicitudController::class, 'agregarExamen'])->name('solicitudes.examenes.store');
-    Route::delete('/solicitudes/{solicitud}/examenes/{examen}', [PortalSolicitudController::class, 'eliminarExamen'])->name('solicitudes.examenes.destroy');
-    Route::get('/solicitudes/{solicitud}/resumen', [PortalSolicitudController::class, 'resumen'])->name('solicitudes.resumen');
+    Route::get('/solicitudes/{solicitud}', [PortalSolicitudController::class, 'show'])->name('solicitudes.show');
 });
 
 require __DIR__.'/auth.php';

@@ -109,8 +109,13 @@
                                     'retornada' => 'badge-success',
                                     default     => 'badge-ghost',
                                 };
+                                $filaClase = match($solicitud->APROBACION) {
+                                    'pendiente' => 'bg-warning/10',
+                                    'cancelada' => 'opacity-40',
+                                    default     => '',
+                                };
                             @endphp
-                            <tr>
+                            <tr class="{{ $filaClase }}">
                                 <td class="font-mono text-sm">{{ $solicitud->ID_SOLICITUD }}</td>
                                 <td>
                                     <p class="font-medium">{{ $solicitud->empresa?->nombre ?? '—' }}</p>
@@ -123,7 +128,16 @@
                                 <td class="text-sm">{{ \Carbon\Carbon::parse($solicitud->FECHA_SOLICITUD)->format('d/m/Y') }}</td>
                                 <td class="text-center font-mono">{{ $solicitud->examenes_count }}</td>
                                 <td class="text-center font-mono">{{ $solicitud->articulos_count }}</td>
-                                <td><span class="badge {{ $badge }}">{{ ucfirst($solicitud->ESTADO_SOLICITUD) }}</span></td>
+                                <td>
+                                    <div class="flex flex-col gap-1 items-start">
+                                        <span class="badge {{ $badge }}">{{ ucfirst($solicitud->ESTADO_SOLICITUD) }}</span>
+                                        @if($solicitud->APROBACION === 'pendiente')
+                                            <span class="badge badge-xs badge-warning">Aprobación pendiente</span>
+                                        @elseif($solicitud->APROBACION === 'cancelada')
+                                            <span class="badge badge-xs badge-error">Cancelada</span>
+                                        @endif
+                                    </div>
+                                </td>
                                 <td>
                                     <div class="flex gap-1 justify-end">
                                         <a href="{{ route('admin.solicitudes.show', $solicitud->ID_SOLICITUD) }}"
@@ -163,13 +177,23 @@
                             'retornada' => 'badge-success',
                             default     => 'badge-ghost',
                         };
+                        $filaClase = match($solicitud->APROBACION) {
+                            'pendiente' => 'bg-warning/10',
+                            'cancelada' => 'opacity-40',
+                            default     => '',
+                        };
                     @endphp
-                    <div class="px-4 py-3">
+                    <div class="px-4 py-3 {{ $filaClase }}">
                         <div class="flex items-start justify-between gap-2">
                             <div class="min-w-0 flex-1">
-                                <div class="flex items-center gap-2">
+                                <div class="flex items-center gap-2 flex-wrap">
                                     <span class="font-mono text-xs text-base-content/50">#{{ $solicitud->ID_SOLICITUD }}</span>
                                     <span class="badge badge-xs {{ $badge }}">{{ ucfirst($solicitud->ESTADO_SOLICITUD) }}</span>
+                                    @if($solicitud->APROBACION === 'pendiente')
+                                        <span class="badge badge-xs badge-warning">Aprobación pendiente</span>
+                                    @elseif($solicitud->APROBACION === 'cancelada')
+                                        <span class="badge badge-xs badge-error">Cancelada</span>
+                                    @endif
                                 </div>
                                 <p class="font-semibold text-sm truncate mt-0.5">{{ $solicitud->empresa?->nombre ?? '—' }}</p>
                                 <p class="text-xs text-base-content/50 truncate">{{ $solicitud->sede?->nombre ?? '—' }}</p>

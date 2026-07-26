@@ -7,7 +7,6 @@ use App\Models\Sede;
 use App\Models\Solicitud;
 use App\Models\SolicitudExamen;
 use App\Models\TipoExamen;
-use Carbon\Carbon;
 use Illuminate\Http\Request;
 
 class PortalSolicitudController extends Controller
@@ -27,33 +26,87 @@ class PortalSolicitudController extends Controller
             return back()->withErrors(['pin' => 'PIN inválido.'])->withInput();
         }
 
+        session([
+            'portal_contacto_id' => $contacto->id,
+            'portal_pin'         => strtoupper($request->pin),
+        ]);
+
+        return redirect()->route('portal.solicitudes.historial');
+    }
+
+    public function salir(Request $request)
+    {
+        $request->session()->forget(['portal_contacto_id', 'portal_pin']);
+        return redirect()->route('portal.login');
+    }
+
+    // ── HISTORIAL DE SOLICITUDES ──
+    public function historial()
+    {
+        $contacto = $this->contactoActual();
+
+        $solicitudes = Solicitud::where('ID_CONTACTO', $contacto->id)
+            ->with('sede')
+            ->withCount('examenes')
+            ->orderBy('FECHA_SOLICITUD', 'desc')
+            ->paginate(10);
+
+        return view('portal.historial', [
+            'contacto'    => $contacto,
+            'solicitudes' => $solicitudes,
+        ]);
+    }
+
+    // ── SHOW: solo datos generales + estado ──
+    public function show(Solicitud $solicitud)
+    {
+        $contacto = $this->contactoActual();
+
+        if ($solicitud->ID_CONTACTO != $contacto->id) {
+            abort(403, 'Acceso no autorizado.');
+        }
+
+        $solicitud->load('examenes', 'empresa', 'sede', 'contacto');
+
+        return view('portal.show', ['solicitud' => $solicitud]);
+    }
+
+    // ── CREATE: formulario de un solo paso con repeater de exámenes ──
+    public function create()
+    {
+        $contacto = $this->contactoActual();
         $contacto->load('sedes', 'empresa');
 
-        return view('portal.create', ['contacto' => $contacto, 'pin' => strtoupper($request->pin)]);
+        $tipoExamenes = TipoExamen::where('estado', 'activo')->orderBy('nombre')->get();
+
+        return view('portal.create', [
+            'contacto'     => $contacto,
+            'tipoExamenes' => $tipoExamenes,
+        ]);
     }
 
     public function store(Request $request)
     {
+        $contacto = $this->contactoActual();
+
         $request->validate([
-            'pin'                  => 'required|string|size:8',
-            'contacto_id'          => 'required|integer|exists:contactos,id',
-            'ID_SEDE'              => 'required|exists:sedes,id',
-            'RESPONSABLE_NOMBRE'   => 'required|string|max:255',
-            'RESPONSABLE_CORREO'   => 'nullable|email|max:255',
-            'RESPONSABLE_TELEFONO' => 'nullable|string|max:20',
-            'RESPONSABLE_CELULAR'  => 'nullable|string|max:20',
-            'DIRECCION_ENVIO'      => 'nullable|string',
-            'SESIONES_SIMULTANEAS' => 'required|in:si,no',
-            'HORARIO_DE_ATENCION'  => 'nullable|string',
-            'OBSERVACIONES'        => 'nullable|string',
-            'ENVIO_ZONA'           => 'nullable|in:cdmx_area_metropolitana,foraneo',
+            'ID_SEDE'                    => 'required|exists:sedes,id',
+            'RESPONSABLE_TITULO'         => 'nullable|string|max:255',
+            'RESPONSABLE_NOMBRE'         => 'required|string|max:255',
+            'RESPONSABLE_CORREO'         => 'nullable|email|max:255',
+            'RESPONSABLE_TELEFONO'       => 'nullable|string|max:20',
+            'DIRECCION_ENVIO'            => 'nullable|string',
+            'SESIONES_SIMULTANEAS'       => 'required|in:si,no',
+            'CANTIDAD_SIMULTANEAS'       => 'nullable|integer|min:1',
+            'FECHA_PRIMERA_APLICACION'   => 'required|date',
+            'CANTIDAD_USB'               => 'nullable|integer|min:0',
+            'CANTIDAD_CD'                => 'nullable|integer|min:0',
+            'OBSERVACIONES'              => 'nullable|string',
+            'ENVIO_ZONA'                 => 'required|in:cdmx_area_metropolitana,foraneo',
+            'examenes'                   => 'required|array|min:1',
+            'examenes.*.tipo_examen_id'  => 'required|exists:tipo_examenes,id',
+            'examenes.*.cantidad'        => 'required|integer|min:1',
         ]);
-
-        $contacto = Contacto::find($request->contacto_id);
-
-        if (!$contacto || $contacto->pin !== strtoupper($request->pin)) {
-            abort(403, 'Acceso no autorizado.');
-        }
 
         if (!$contacto->sedes()->where('sedes.id', $request->ID_SEDE)->exists()) {
             abort(403, 'Esta sede no está asignada a tu contacto.');
@@ -61,120 +114,93 @@ class PortalSolicitudController extends Controller
 
         $sede = Sede::findOrFail($request->ID_SEDE);
 
-        $solicitud = Solicitud::create([
-            'ID_EMPRESA'              => $sede->id_empresa,
-            'ID_SEDE'                 => $sede->id,
-            'ID_CONTACTO'             => $contacto->id,
-            'RESPONSABLE_NOMBRE'      => $request->RESPONSABLE_NOMBRE,
-            'RESPONSABLE_CORREO'      => $request->RESPONSABLE_CORREO ?? '',
-            'RESPONSABLE_TELEFONO'    => $request->RESPONSABLE_TELEFONO ?? '',
-            'RESPONSABLE_CELULAR'     => $request->RESPONSABLE_CELULAR ?? '',
-            'DIRECCION_ENVIO'         => $request->DIRECCION_ENVIO ?? '',
-            'SESIONES_SIMULTANEAS'    => $request->SESIONES_SIMULTANEAS,
-            'HORARIO_DE_ATENCION'     => $request->HORARIO_DE_ATENCION ?? '',
-            'OBSERVACIONES'           => $request->OBSERVACIONES ?? '',
-            'ENVIO_ZONA'              => $request->ENVIO_ZONA,
-            'CANTIDAD_EXAMENES'       => 0,
-            'CANTIDAD_EXAMENES_APLICADOS' => 0,
-            'ESTADO_SOLICITUD'        => 'pendiente',
-            'ESTADO_FACTURA'          => 'pendiente',
-            'FECHA_SOLICITUD'         => now(),
-        ]);
+        $diasMinimos = $request->ENVIO_ZONA === 'cdmx_area_metropolitana' ? 10 : 15;
+        $fechaMinima = \Carbon\Carbon::now()->addDays($diasMinimos)->format('Y-m-d');
 
-        return redirect()->route('portal.solicitudes.examenes', [
-            'solicitud' => $solicitud->ID_SOLICITUD,
-            'pin'       => strtoupper($request->pin),
-            'contacto'  => $contacto->id,
-        ]);
-    }
-
-    public function examenes(Request $request, Solicitud $solicitud)
-    {
-        $this->autorizar($request, $solicitud);
-
-        $solicitud->load('examenes', 'empresa', 'sede');
-        $tipoExamenes = TipoExamen::where('estado', 'activo')->orderBy('nombre')->get();
-
-        return view('portal.examenes', [
-            'solicitud'    => $solicitud,
-            'tipoExamenes' => $tipoExamenes,
-            'pin'          => strtoupper($request->pin),
-            'contactoId'   => $request->contacto,
-        ]);
-    }
-
-    public function agregarExamen(Request $request, Solicitud $solicitud)
-    {
-        $this->autorizar($request, $solicitud);
-
-        $request->validate([
-            'tipo_examen_id' => 'required|exists:tipo_examenes,id',
-            'cantidad'       => 'required|integer|min:1',
-            'fecha'          => 'required|date',
-        ]);
-
-        $tipo = TipoExamen::findOrFail($request->tipo_examen_id);
-        $fechaMinima = Carbon::now()->addDays($tipo->dias_anticipacion)->format('Y-m-d');
-
-        if ($request->fecha < $fechaMinima) {
-            return back()->withErrors(['fecha' => "La fecha mínima para este examen es {$fechaMinima} ({$tipo->dias_anticipacion} días de anticipación)."])->withInput();
+        if ($request->FECHA_PRIMERA_APLICACION < $fechaMinima) {
+            return back()->withInput()->withErrors([
+                'FECHA_PRIMERA_APLICACION' => "La fecha mínima de primer aplicación para esta zona es {$fechaMinima} ({$diasMinimos} días de anticipación).",
+            ]);
         }
 
-        if ($request->cantidad < $tipo->candidatos_minimos) {
-            return back()->withErrors(['cantidad' => "La cantidad mínima de candidatos para este examen es {$tipo->candidatos_minimos}."])->withInput();
+        $solicitud = \Illuminate\Support\Facades\DB::transaction(function () use ($request, $contacto, $sede) {
+            $tipos = TipoExamen::whereIn('id', collect($request->examenes)->pluck('tipo_examen_id'))
+                ->get()
+                ->keyBy('id');
+
+            $nombresExamenes = collect($request->examenes)
+                ->pluck('tipo_examen_id')
+                ->unique()
+                ->map(fn($id) => $tipos[$id]->nombre)
+                ->implode(', ');
+
+            $totalCandidatos = collect($request->examenes)->sum('cantidad');
+
+            $solicitud = Solicitud::create([
+                'ID_EMPRESA'               => $sede->id_empresa,
+                'ID_SEDE'                  => $sede->id,
+                'ID_CONTACTO'              => $contacto->id,
+                'RESPONSABLE_TITULO'       => $request->RESPONSABLE_TITULO ?? '',
+                'RESPONSABLE_NOMBRE'       => $request->RESPONSABLE_NOMBRE,
+                'RESPONSABLE_CORREO'       => $request->RESPONSABLE_CORREO ?? '',
+                'RESPONSABLE_TELEFONO'     => $request->RESPONSABLE_TELEFONO ?? '',
+                'RESPONSABLE_CELULAR'      => '',
+                'DIRECCION_ENVIO'          => $request->DIRECCION_ENVIO ?? '',
+                'SESIONES_SIMULTANEAS'     => $request->SESIONES_SIMULTANEAS,
+                'CANTIDAD_SIMULTANEAS'     => $request->CANTIDAD_SIMULTANEAS ?? null,
+                'HORARIO_DE_ATENCION'      => '',
+                'FECHA_PRIMERA_APLICACION' => $request->FECHA_PRIMERA_APLICACION,
+                'CANTIDAD_USB'             => $request->CANTIDAD_USB ?? 0,
+                'CANTIDAD_CD'              => $request->CANTIDAD_CD ?? 0,
+                'OBSERVACIONES'            => $request->OBSERVACIONES ?? '',
+                'ENVIO_ZONA'               => $request->ENVIO_ZONA,
+                'ENVIO_EXAMEN'             => $nombresExamenes,
+                'ENVIO_NUMERO_HOJAS'       => $totalCandidatos,
+                'CANTIDAD_EXAMENES'        => 0,
+                'CANTIDAD_EXAMENES_APLICADOS' => 0,
+                'ESTADO_SOLICITUD'         => 'pendiente',
+                'APROBACION'               => 'pendiente',
+                'ESTADO_FACTURA'           => 'pendiente',
+                'FECHA_SOLICITUD'          => now(),
+            ]);
+
+            foreach ($request->examenes as $fila) {
+                $tipo = $tipos[$fila['tipo_examen_id']];
+
+                SolicitudExamen::create([
+                    'ID_SOLICITUD' => $solicitud->ID_SOLICITUD,
+                    'EXAMEN'       => $tipo->nombre,
+                    'CANTIDAD'     => $fila['cantidad'],
+                    'ESTADO'       => 'pendiente',
+                    'FECHA'        => $request->FECHA_PRIMERA_APLICACION,
+                ]);
+
+                $solicitud->increment('CANTIDAD_EXAMENES', $fila['cantidad']);
+            }
+
+            return $solicitud;
+        });
+
+        return redirect()->route('portal.solicitudes.show', $solicitud->ID_SOLICITUD)
+            ->with('success', 'Tu solicitud fue registrada correctamente.');
+    }
+
+    private function contactoActual(): Contacto
+    {
+        $contactoId = session('portal_contacto_id');
+        $pin        = session('portal_pin');
+
+        if (!$contactoId || !$pin) {
+            abort(redirect()->route('portal.login')->withErrors(['pin' => 'Tu sesión expiró, ingresa tu PIN nuevamente.']));
         }
 
-        SolicitudExamen::create([
-            'ID_SOLICITUD' => $solicitud->ID_SOLICITUD,
-            'EXAMEN'       => $tipo->nombre,
-            'CANTIDAD'     => $request->cantidad,
-            'ESTADO'       => 'pendiente',
-            'FECHA'        => $request->fecha,
-        ]);
+        $contacto = Contacto::find($contactoId);
 
-        $solicitud->increment('CANTIDAD_EXAMENES', $request->cantidad);
-
-        return redirect()->route('portal.solicitudes.examenes', [
-            'solicitud' => $solicitud->ID_SOLICITUD,
-            'pin'       => $request->pin,
-            'contacto'  => $request->contacto,
-        ])->with('success', 'Examen agregado correctamente.');
-    }
-
-    public function eliminarExamen(Request $request, Solicitud $solicitud, SolicitudExamen $examen)
-    {
-        $this->autorizar($request, $solicitud);
-
-        $solicitud->decrement('CANTIDAD_EXAMENES', $examen->CANTIDAD);
-        $examen->delete();
-
-        return redirect()->route('portal.solicitudes.examenes', [
-            'solicitud' => $solicitud->ID_SOLICITUD,
-            'pin'       => $request->pin,
-            'contacto'  => $request->contacto,
-        ])->with('success', 'Examen eliminado correctamente.');
-    }
-
-    private function autorizar(Request $request, Solicitud $solicitud): void
-    {
-        $request->validate([
-            'pin'      => 'required|string|size:8',
-            'contacto' => 'required|integer',
-        ]);
-
-        $contacto = Contacto::find($request->contacto);
-
-        if (!$contacto || $contacto->pin !== strtoupper($request->pin) || $solicitud->ID_CONTACTO != $contacto->id) {
-            abort(403, 'Acceso no autorizado.');
+        if (!$contacto || $contacto->pin !== $pin) {
+            session()->forget(['portal_contacto_id', 'portal_pin']);
+            abort(redirect()->route('portal.login')->withErrors(['pin' => 'Tu sesión ya no es válida, ingresa tu PIN nuevamente.']));
         }
-    }
 
-    public function resumen(Request $request, Solicitud $solicitud)
-    {
-        $this->autorizar($request, $solicitud);
-
-        $solicitud->load('examenes', 'empresa', 'sede', 'contacto');
-
-        return view('portal.resumen', ['solicitud' => $solicitud]);
+        return $contacto;
     }
 }

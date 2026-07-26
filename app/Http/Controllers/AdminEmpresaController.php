@@ -81,9 +81,12 @@ class AdminEmpresaController extends Controller
             ->with('sede')
             ->withCount('examenes')
             ->orderBy('FECHA_SOLICITUD', 'desc')
-            ->paginate(10);
+            ->paginate(10)
+            ->withQueryString();
 
-        return view('admin.empresas.show', compact('empresa', 'solicitudes'));
+        $tabActiva = request('tab', 'sedes');
+
+        return view('admin.empresas.show', compact('empresa', 'solicitudes', 'tabActiva'));
     }
 
     public function edit(Empresa $empresa)

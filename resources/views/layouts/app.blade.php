@@ -11,6 +11,25 @@
     </head>
     <body class="font-sans antialiased bg-base-200 min-h-screen">
 
+        @php
+            $solicitudesPendientesAprobacion = \App\Models\Solicitud::where('APROBACION', 'pendiente')->count();
+
+            $solicitudesPendientesEnvio = \App\Models\Solicitud::where('APROBACION', 'aprobada')
+                ->whereHas('examenes')
+                ->whereDoesntHave('articulos')
+                ->count();
+
+            $solicitudesPendientesFacturacion = \App\Models\Solicitud::where('ESTADO_SOLICITUD', 'retornada')
+                ->where('ESTADO_FACTURA', 'pendiente')
+                ->count();
+
+            $solicitudesCobranzaVencida = \App\Models\Solicitud::whereNotNull('FECHA_VENCIMIENTO_COBRANZA')
+                ->where('FECHA_VENCIMIENTO_COBRANZA', '<', now())
+                ->get()
+                ->filter(fn($s) => $s->saldoPendiente() > 0)
+                ->count();
+        @endphp
+
         <div x-data="{ sidebarOpen: false, collapsed: false }" class="flex min-h-screen">
 
             {{-- ===================== OFFCANVAS MÓVIL ===================== --}}
@@ -73,24 +92,36 @@
                         <a href="{{ route('admin.solicitudes.index') }}" class="{{ request()->routeIs('admin.solicitudes*') ? 'active' : '' }}">
                             <x-heroicon-o-clipboard-document-list class="w-5 h-5 flex-shrink-0" />
                             Solicitudes
+                            @if($solicitudesPendientesAprobacion > 0)
+                                <span class="badge badge-accent badge-sm ml-auto">{{ $solicitudesPendientesAprobacion }}</span>
+                            @endif
                         </a>
                     </li>
                     <li>
                         <a href="{{ route('admin.envios.index') }}" class="{{ request()->routeIs('admin.envios*') ? 'active' : '' }}">
                             <x-heroicon-o-truck class="w-5 h-5 flex-shrink-0" />
                             Envíos
+                            @if($solicitudesPendientesEnvio > 0)
+                                <span class="badge badge-warning badge-sm ml-auto">{{ $solicitudesPendientesEnvio }}</span>
+                            @endif
                         </a>
                     </li>
                     <li>
                         <a href="{{ route('admin.devoluciones.index') }}" class="{{ request()->routeIs('admin.devoluciones*') ? 'active' : '' }}">
                             <x-heroicon-o-arrow-uturn-left class="w-5 h-5 flex-shrink-0" />
                             Devoluciones
+                            @if($solicitudesCobranzaVencida > 0)
+                                <span class="badge badge-accent badge-sm ml-auto">{{ $solicitudesCobranzaVencida }}</span>
+                            @endif
                         </a>
                     </li>
                     <li>
                         <a href="{{ route('admin.facturacion.index') }}" class="{{ request()->routeIs('admin.facturacion*') ? 'active' : '' }}">
                             <x-heroicon-o-document-currency-dollar class="w-5 h-5 flex-shrink-0" />
                             Facturación
+                            @if($solicitudesPendientesFacturacion > 0)
+                                <span class="badge badge-warning badge-sm ml-auto">{{ $solicitudesPendientesFacturacion }}</span>
+                            @endif
                         </a>
                     </li>
                     <li>
@@ -169,7 +200,7 @@
 
                 {{-- Logo / Collapse --}}
                 <div class="flex items-center bg-black/50 border-b border-base-300 h-16 px-3 gap-2 overflow-hidden">
-                    <button @click="collapsed = !collapsed" class="btn btn-border-white btn-square btn-sm flex-shrink-0">
+                    <button @click="collapsed = !collapsed" class="btn btn-outline-white btn-square btn-sm flex-shrink-0">
                         <x-heroicon-o-bars-3 class="w-5 h-5" />
                     </button>
                     <a href="{{ route('dashboard') }}" class="truncate">
@@ -180,14 +211,14 @@
                     </a>
                 </div>
                 {{-- Nav desktop --}}
-                <ul class="menu flex-1 px-2 py-4 gap-1 overflow-y-auto overflow-x-hidden
+                <ul class="menu w-full flex-1 px-2 py-4 gap-1 overflow-y-auto overflow-x-hidden
                     [&_a]:text-primary-content [&_a]:hover:bg-primary-content/20
                     [&_a.active]:bg-primary-content/30 [&_a.active]:text-primary-content
                     [&_.menu-title]:text-primary-content/60">
 
                     <li>
                         <a href="{{ route('dashboard') }}"
-                            class="{{ request()->routeIs('dashboard') ? 'active' : '' }}"
+                            class="w-full {{ request()->routeIs('dashboard') ? 'active' : '' }}"
                             :class="collapsed ? 'justify-center' : ''"
                             :title="collapsed ? 'Dashboard' : ''">
                             <x-heroicon-o-home class="w-5 h-5 flex-shrink-0" />
@@ -200,7 +231,7 @@
 
                     <li>
                         <a href="{{ route('admin.articulos.index') }}"
-                            class="{{ request()->routeIs('admin.articulos*') ? 'active' : '' }}"
+                            class="w-full {{ request()->routeIs('admin.articulos*') ? 'active' : '' }}"
                             :class="collapsed ? 'justify-center' : ''"
                             :title="collapsed ? 'Inventario' : ''">
                             <x-heroicon-o-cube class="w-5 h-5 flex-shrink-0" />
@@ -209,43 +240,75 @@
                     </li>
                     <li>
                         <a href="{{ route('admin.solicitudes.index') }}"
-                            class="{{ request()->routeIs('admin.solicitudes*') ? 'active' : '' }}"
+                            class="w-full {{ request()->routeIs('admin.solicitudes*') ? 'active' : '' }}"
                             :class="collapsed ? 'justify-center' : ''"
-                            :title="collapsed ? 'Solicitudes' : ''">
-                            <x-heroicon-o-clipboard-document-list class="w-5 h-5 flex-shrink-0" />
-                            <span x-show="!collapsed" x-transition.opacity class="truncate">Solicitudes</span>
+                            :title="collapsed ? 'Solicitudes ({{ $solicitudesPendientesAprobacion }} pendientes)' : ''">
+                            <div class="indicator flex-shrink-0">
+                                @if($solicitudesPendientesAprobacion > 0)
+                                    <span class="indicator-item badge badge-accent badge-xs" x-show="collapsed"></span>
+                                @endif
+                                <x-heroicon-o-clipboard-document-list class="w-5 h-5" />
+                            </div>
+                            <span x-show="!collapsed" x-transition.opacity class="truncate flex-1">Solicitudes</span>
+                            @if($solicitudesPendientesAprobacion > 0)
+                                <span x-show="!collapsed" class="badge badge-accent badge-sm">{{ $solicitudesPendientesAprobacion }}</span>
+                            @endif
                         </a>
                     </li>
                     <li>
                         <a href="{{ route('admin.envios.index') }}"
-                            class="{{ request()->routeIs('admin.envios*') ? 'active' : '' }}"
+                            class="w-full {{ request()->routeIs('admin.envios*') ? 'active' : '' }}"
                             :class="collapsed ? 'justify-center' : ''"
-                            :title="collapsed ? 'Envíos' : ''">
-                            <x-heroicon-o-truck class="w-5 h-5 flex-shrink-0" />
-                            <span x-show="!collapsed" x-transition.opacity class="truncate">Envíos</span>
+                            :title="collapsed ? 'Envíos ({{ $solicitudesPendientesEnvio }} pendientes)' : ''">
+                            <div class="indicator flex-shrink-0">
+                                @if($solicitudesPendientesEnvio > 0)
+                                    <span class="indicator-item badge badge-warning badge-xs" x-show="collapsed"></span>
+                                @endif
+                                <x-heroicon-o-truck class="w-5 h-5" />
+                            </div>
+                            <span x-show="!collapsed" x-transition.opacity class="truncate flex-1">Envíos</span>
+                            @if($solicitudesPendientesEnvio > 0)
+                                <span x-show="!collapsed" class="badge badge-warning badge-sm">{{ $solicitudesPendientesEnvio }}</span>
+                            @endif
                         </a>
                     </li>
                     <li>
                         <a href="{{ route('admin.devoluciones.index') }}"
-                            class="{{ request()->routeIs('admin.devoluciones*') ? 'active' : '' }}"
+                            class="w-full {{ request()->routeIs('admin.devoluciones*') ? 'active' : '' }}"
                             :class="collapsed ? 'justify-center' : ''"
-                            :title="collapsed ? 'Devoluciones' : ''">
-                            <x-heroicon-o-arrow-uturn-left class="w-5 h-5 flex-shrink-0" />
-                            <span x-show="!collapsed" x-transition.opacity class="truncate">Devoluciones</span>
+                            :title="collapsed ? 'Devoluciones ({{ $solicitudesCobranzaVencida }} vencidas)' : ''">
+                            <div class="indicator flex-shrink-0">
+                                @if($solicitudesCobranzaVencida > 0)
+                                    <span class="indicator-item badge badge-error badge-xs" x-show="collapsed"></span>
+                                @endif
+                                <x-heroicon-o-arrow-uturn-left class="w-5 h-5" />
+                            </div>
+                            <span x-show="!collapsed" x-transition.opacity class="truncate flex-1">Devoluciones</span>
+                            @if($solicitudesCobranzaVencida > 0)
+                                <span x-show="!collapsed" class="badge badge-error badge-sm">{{ $solicitudesCobranzaVencida }}</span>
+                            @endif
                         </a>
                     </li>
                     <li>
                         <a href="{{ route('admin.facturacion.index') }}"
-                            class="{{ request()->routeIs('admin.facturacion*') ? 'active' : '' }}"
+                            class="w-full {{ request()->routeIs('admin.facturacion*') ? 'active' : '' }}"
                             :class="collapsed ? 'justify-center' : ''"
-                            :title="collapsed ? 'Facturación' : ''">
-                            <x-heroicon-o-document-currency-dollar class="w-5 h-5 flex-shrink-0" />
-                            <span x-show="!collapsed" x-transition.opacity class="truncate">Facturación</span>
+                            :title="collapsed ? 'Facturación ({{ $solicitudesPendientesFacturacion }} pendientes)' : ''">
+                            <div class="indicator flex-shrink-0">
+                                @if($solicitudesPendientesFacturacion > 0)
+                                    <span class="indicator-item badge badge-warning badge-xs" x-show="collapsed"></span>
+                                @endif
+                                <x-heroicon-o-document-currency-dollar class="w-5 h-5" />
+                            </div>
+                            <span x-show="!collapsed" x-transition.opacity class="truncate flex-1">Facturación</span>
+                            @if($solicitudesPendientesFacturacion > 0)
+                                <span x-show="!collapsed" class="badge badge-warning badge-sm">{{ $solicitudesPendientesFacturacion }}</span>
+                            @endif
                         </a>
                     </li>
                     <li>
                         <a href="{{ route('admin.destruccion.index') }}"
-                            class="{{ request()->routeIs('admin.destruccion*') ? 'active' : '' }}"
+                            class="w-full {{ request()->routeIs('admin.destruccion*') ? 'active' : '' }}"
                             :class="collapsed ? 'justify-center' : ''"
                             :title="collapsed ? 'Destrucción' : ''">
                             <x-heroicon-o-trash class="w-5 h-5 flex-shrink-0" />
@@ -258,7 +321,7 @@
 
                     <li>
                         <a href="{{ route('admin.empresas.index') }}"
-                            class="{{ request()->routeIs('admin.empresas*') ? 'active' : '' }}"
+                            class="w-full {{ request()->routeIs('admin.empresas*') ? 'active' : '' }}"
                             :class="collapsed ? 'justify-center' : ''"
                             :title="collapsed ? 'Clientes' : ''">
                             <x-heroicon-o-building-office-2 class="w-5 h-5 flex-shrink-0" />
@@ -267,7 +330,7 @@
                     </li>
                     <li>
                         <a href="{{ route('admin.tipo-examenes.index') }}"
-                            class="{{ request()->routeIs('admin.tipo-examenes*') ? 'active' : '' }}"
+                            class="w-full {{ request()->routeIs('admin.tipo-examenes*') ? 'active' : '' }}"
                             :class="collapsed ? 'justify-center' : ''"
                             :title="collapsed ? 'Tipos de examen' : ''">
                             <x-heroicon-o-document-text class="w-5 h-5 flex-shrink-0" />
@@ -278,7 +341,7 @@
                     <li x-show="collapsed" class="divider my-1"></li>
                     <li>
                         <a href="{{ route('admin.usuarios.index') }}"
-                            class="{{ request()->routeIs('admin.usuarios*') ? 'active' : '' }}"
+                            class="w-full {{ request()->routeIs('admin.usuarios*') ? 'active' : '' }}"
                             :class="collapsed ? 'justify-center' : ''"
                             :title="collapsed ? 'Usuarios' : ''">
                             <x-heroicon-o-users class="w-5 h-5 flex-shrink-0" />
@@ -287,7 +350,7 @@
                     </li>
                     <li>
                         <a href="{{ route('admin.roles.index') }}"
-                            class="{{ request()->routeIs('admin.roles*') ? 'active' : '' }}"
+                            class="w-full {{ request()->routeIs('admin.roles*') ? 'active' : '' }}"
                             :class="collapsed ? 'justify-center' : ''"
                             :title="collapsed ? 'Roles' : ''">
                             <x-heroicon-o-shield-check class="w-5 h-5 flex-shrink-0" />
@@ -296,7 +359,7 @@
                     </li>
                     <li>
                         <a href="{{ route('admin.importacion.index') }}"
-                            class="{{ request()->routeIs('admin.importacion*') ? 'active' : '' }}"
+                            class="w-full {{ request()->routeIs('admin.importacion*') ? 'active' : '' }}"
                             :class="collapsed ? 'justify-center' : ''"
                             :title="collapsed ? 'Importación' : ''">
                             <x-heroicon-o-arrow-up-tray class="w-5 h-5 flex-shrink-0" />
@@ -305,7 +368,7 @@
                     </li>
                     <li>
                         <a href="{{ route('admin.bitacora.index') }}"
-                            class="{{ request()->routeIs('admin.bitacora*') ? 'active' : '' }}"
+                            class="w-full {{ request()->routeIs('admin.bitacora*') ? 'active' : '' }}"
                             :class="collapsed ? 'justify-center' : ''"
                             :title="collapsed ? 'Bitácora' : ''">
                             <x-heroicon-o-document-magnifying-glass class="w-5 h-5 flex-shrink-0" />
@@ -318,7 +381,7 @@
                 <div class="border-t border-primary/20 p-3">
                     <div x-show="!collapsed" x-transition.opacity class="flex items-center gap-3 mb-2 px-1">
                         <div class="avatar placeholder flex-shrink-0">
-                            <div class="bg-primary-content/20 text-primary-content rounded-full w-8">
+                            <div class="bg-primary-content/20 text-primary-content rounded-full w-8 flex items-center justify-center">
                                 <span class="text-xs">{{ substr(Auth::user()->name, 0, 1) }}</span>
                             </div>
                         </div>
@@ -385,7 +448,12 @@
                 <a href="{{ route('admin.solicitudes.index') }}"
                     class="flex flex-col items-center gap-1 px-4 py-2 rounded-lg transition-colors
                         {{ request()->routeIs('admin.solicitudes*') ? 'text-primary' : 'text-base-content/50' }}">
-                    <x-heroicon-o-clipboard-document-list class="w-6 h-6" />
+                    <div class="indicator">
+                        @if($solicitudesPendientesAprobacion > 0)
+                            <span class="indicator-item badge badge-accent badge-xs">{{ $solicitudesPendientesAprobacion }}</span>
+                        @endif
+                        <x-heroicon-o-clipboard-document-list class="w-6 h-6" />
+                    </div>
                     <span class="text-xs font-medium">Solicitudes</span>
                 </a>
 

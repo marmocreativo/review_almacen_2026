@@ -40,6 +40,11 @@ class AdminContactoController extends Controller
         $contacto = Contacto::create($validated);
         $contacto->sedes()->sync($sedes);
 
+        if ($request->wantsJson()) {
+            $contacto->load('sedes');
+            return response()->json(['success' => true, 'contacto' => $contacto]);
+        }
+
         return redirect()->route('admin.empresas.contactos.index', $empresa)
             ->with('success', "Contacto creado correctamente. PIN de acceso: {$contacto->pin}");
     }
@@ -65,23 +70,40 @@ class AdminContactoController extends Controller
         $sedes = $validated['sedes'] ?? [];
         unset($validated['sedes']);
 
+        if (!$contacto->pin) {
+            $validated['pin'] = Contacto::generarPinUnico();
+        }
+
         $contacto->update($validated);
         $contacto->sedes()->sync($sedes);
+
+        if ($request->wantsJson()) {
+            $contacto->load('sedes');
+            return response()->json(['success' => true, 'contacto' => $contacto]);
+        }
 
         return redirect()->route('admin.empresas.contactos.index', $empresa)
             ->with('success', 'Contacto actualizado correctamente.');
     }
 
-    public function destroy(Empresa $empresa, Contacto $contacto)
+    public function destroy(Request $request, Empresa $empresa, Contacto $contacto)
     {
         $contacto->delete(); // el pivote se limpia solo por cascadeOnDelete
+
+        if ($request->wantsJson()) {
+            return response()->json(['success' => true]);
+        }
+
         return redirect()->route('admin.empresas.contactos.index', $empresa)
             ->with('success', 'Contacto eliminado correctamente.');
     }
 
-    public function enviarPin(Empresa $empresa, Contacto $contacto)
+    public function enviarPin(Request $request, Empresa $empresa, Contacto $contacto)
     {
         if (!$contacto->correo) {
+            if ($request->wantsJson()) {
+                return response()->json(['success' => false, 'message' => 'Este contacto no tiene correo electrónico registrado.'], 422);
+            }
             return back()->with('error', 'Este contacto no tiene correo electrónico registrado.');
         }
 
@@ -98,6 +120,16 @@ class AdminContactoController extends Controller
             }
         );
 
+        if ($request->wantsJson()) {
+            return response()->json(['success' => true, 'message' => "PIN enviado a {$contacto->correo}."]);
+        }
+
         return back()->with('success', "PIN enviado a {$contacto->correo}.");
+    }
+
+    public function json(Empresa $empresa)
+    {
+        $contactos = $empresa->contactos()->with('sedes')->latest()->get();
+        return response()->json($contactos);
     }
 }
