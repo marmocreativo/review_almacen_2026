@@ -16,18 +16,7 @@
                 @endphp
                 <span class="badge {{ $badge }}">{{ ucfirst($solicitud->ESTADO_SOLICITUD) }}</span>
             </div>
-            @if($solicitud->isEnviada())
-                <form method="POST" action="{{ route('admin.solicitudes.estado', $solicitud) }}">
-                    @csrf @method('PATCH')
-                    <input type="hidden" name="estado" value="retornada">
-                    <button type="submit" class="btn btn-success btn-sm gap-1"
-                        onclick="return confirm('¿Marcar esta solicitud como retornada? Verifica que todos los artículos hayan sido procesados.')">
-                        <x-heroicon-o-check class="w-4 h-4" />
-                        Marcar como retornada
-                    </button>
-                </form>
-            @endif
-        </div>
+            </div>
     </x-slot>
 
     <x-alert />
@@ -47,8 +36,20 @@
         </div>
     @endif
 
-    <form method="POST" action="{{ route('admin.solicitudes.devolucion.procesar', $solicitud) }}" id="form-devolucion">
+    @if($solicitud->isRetornada())
+        <div class="flex justify-end mb-4" x-data="{ reeditando: false }" x-init="window.dispatchEvent(new CustomEvent('reeditando-init'))" @reeditando-toggle.window="reeditando = !reeditando">
+            <button type="button" class="btn btn-outline btn-warning btn-sm gap-1"
+                @click="window.dispatchEvent(new CustomEvent('reeditando-toggle'))">
+                <x-heroicon-o-pencil class="w-4 h-4" />
+                <span x-text="reeditando ? 'Cancelar reedición' : 'Reeditar devolución'"></span>
+            </button>
+        </div>
+    @endif
+
+    <form method="POST" action="{{ route('admin.solicitudes.devolucion.procesar', $solicitud) }}" id="form-devolucion"
+        x-data="{ reeditando: false }" @reeditando-toggle.window="reeditando = !reeditando">
         @csrf
+        <input type="hidden" name="reedicion" x-bind:value="reeditando ? 1 : 0" />
         @if($cajasAbiertas->isNotEmpty())
             <div class="card bg-base-100 shadow mb-4">
                 <div class="card-body py-4">
@@ -114,8 +115,8 @@
                                         <td class="font-mono text-xs">{{ $sa->SERIE ?: '—' }}</td>
                                         <td>{{ $sa->NOMBRE }}</td>
                                         @if($sa->isRetornado())
-                                            <td class="text-xs text-base-content/60">{{ $sa->NOMBRE_CANDIDATO ?: '—' }}</td>
-                                            <td>
+                                            <td x-show="!reeditando" class="text-xs text-base-content/60">{{ $sa->NOMBRE_CANDIDATO ?: '—' }}</td>
+                                            <td x-show="!reeditando">
                                                 @php
                                                     $badgeDev = match($sa->ESTADO_DEVOLUCION) {
                                                         'aplicado'    => 'badge-success',
@@ -128,6 +129,24 @@
                                                 <span class="badge badge-sm {{ $badgeDev }}">
                                                     {{ $sa->ESTADO_DEVOLUCION ? ucfirst(str_replace('_', ' ', $sa->ESTADO_DEVOLUCION)) : 'Retornado' }}
                                                 </span>
+                                            </td>
+
+                                            <td x-show="reeditando" x-cloak>
+                                                <input type="hidden" name="items[{{ $sa->ID }}][id]" value="{{ $sa->ID }}" />
+                                                <input type="text" name="items[{{ $sa->ID }}][nombre_candidato]"
+                                                    value="{{ $sa->NOMBRE_CANDIDATO }}"
+                                                    placeholder="Nombre del candidato"
+                                                    class="input input-bordered input-xs w-full" />
+                                            </td>
+                                            <td x-show="reeditando" x-cloak>
+                                                <select name="items[{{ $sa->ID }}][estado_devolucion]"
+                                                    class="select select-bordered select-xs w-full item-estado-devolucion">
+                                                    <option value="">Selecciona…</option>
+                                                    <option value="aplicado" {{ $sa->ESTADO_DEVOLUCION === 'aplicado' ? 'selected' : '' }}>Aplicado</option>
+                                                    <option value="no_aplicado" {{ $sa->ESTADO_DEVOLUCION === 'no_aplicado' ? 'selected' : '' }}>No aplicado</option>
+                                                    <option value="danado" {{ $sa->ESTADO_DEVOLUCION === 'danado' ? 'selected' : '' }}>Dañado</option>
+                                                    <option value="faltante" {{ $sa->ESTADO_DEVOLUCION === 'faltante' ? 'selected' : '' }}>Faltante</option>
+                                                </select>
                                             </td>
                                         @else
                                             <td>
@@ -163,12 +182,20 @@
             </div>
         @endforelse
 
-        @if($solicitud->examenes->flatMap->articulos->where('ESTADO', '!=', 'retornado')->isNotEmpty() && $solicitud->isEnviada())
+        @if($solicitud->isEnviada())
             <div class="flex justify-end">
                 <button type="submit" class="btn btn-primary gap-1"
                     onclick="return confirm('¿Procesar la devolución de los artículos marcados? Esta acción no se puede deshacer.')">
                     <x-heroicon-o-check class="w-4 h-4" />
                     Procesar devolución
+                </button>
+            </div>
+        @elseif($solicitud->isRetornada())
+            <div class="flex justify-end" x-show="reeditando" x-cloak>
+                <button type="submit" class="btn btn-warning gap-1"
+                    onclick="return confirm('¿Guardar la reedición de esta devolución? Quedará registrado en bitácora.')">
+                    <x-heroicon-o-check class="w-4 h-4" />
+                    Guardar reedición
                 </button>
             </div>
         @endif

@@ -68,6 +68,7 @@ Route::middleware('auth')->group(function () {
         Route::post('articulos', [AdminArticuloController::class, 'store'])->name('articulos.store');
         Route::get('articulos/grupo/editar', [AdminArticuloController::class, 'editGrupo'])->name('articulos.grupo.edit');
         Route::patch('articulos/grupo', [AdminArticuloController::class, 'updateGrupo'])->name('articulos.grupo.update');
+        Route::get('articulos/grupo/ver', [AdminArticuloController::class, 'showGrupo'])->name('articulos.grupo.show');
         Route::get('articulos/{articulo}', [AdminArticuloController::class, 'show'])->name('articulos.show');
         Route::get('articulos/{articulo}/edit', [AdminArticuloController::class, 'edit'])->name('articulos.edit');
         Route::put('articulos/{articulo}', [AdminArticuloController::class, 'update'])->name('articulos.update');
@@ -121,6 +122,7 @@ Route::middleware('auth')->group(function () {
         Route::post('solicitudes/{solicitud}/examenes', [AdminSolicitudController::class, 'agregarExamen'])->name('solicitudes.examenes.store');
         Route::delete('solicitudes/{solicitud}/examenes/{examen}', [AdminSolicitudController::class, 'eliminarExamen'])->name('solicitudes.examenes.destroy');
         Route::post('solicitudes/{solicitud}/examenes/{examen}/articulos', [AdminSolicitudController::class, 'agregarArticulo'])->name('solicitudes.articulos.store');
+        Route::post('solicitudes/{solicitud}/examenes/{examen}/articulos/revisar', [AdminSolicitudController::class, 'revisarArticulos'])->name('solicitudes.articulos.revisar');
         Route::delete('solicitudes/{solicitud}/articulos/{articuloSolicitud}', [AdminSolicitudController::class, 'eliminarArticulo'])->name('solicitudes.articulos.destroy');
         Route::delete('solicitudes/{solicitud}/articulos-lote', [AdminSolicitudController::class, 'eliminarArticulosLote'])->name('solicitudes.articulos.destroy-lote');
 

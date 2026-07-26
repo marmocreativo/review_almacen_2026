@@ -480,6 +480,34 @@ class AdminArticuloController extends Controller
         return view('admin.articulos.show', compact('articulo', 'destruccion'));
     }
 
+    public function showGrupo(Request $request)
+    {
+        $ids = $request->query('ids', []);
+
+        if (!is_array($ids) || empty($ids)) {
+            abort(404);
+        }
+
+        $articulos = Articulo::whereIn('ID_ARTICULO', $ids)
+            ->with(['solicitudesArticulos.solicitud.empresa', 'solicitudesArticulos.solicitud.sede', 'ordenesArticulos.orden'])
+            ->orderBy('SERIE_NUMERICO')
+            ->get();
+
+        if ($articulos->isEmpty()) {
+            abort(404);
+        }
+
+        $primero = $articulos->first();
+        $ultimo  = $articulos->last();
+
+        $destruccion = \App\Models\SolicitudArticulo::whereIn('ID_ARTICULO', $ids)
+            ->where('CANTIDAD_A_DESTRUCCION', '>', 0)
+            ->with('solicitud.empresa')
+            ->get();
+
+        return view('admin.articulos.show-grupo', compact('articulos', 'primero', 'ultimo', 'destruccion', 'ids'));
+    }
+
     public function edit(Articulo $articulo)
     {
         $tiposExamen = TipoExamen::where('estado', 'activo')->orderBy('nombre')->get();

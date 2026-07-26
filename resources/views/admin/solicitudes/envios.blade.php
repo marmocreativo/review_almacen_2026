@@ -74,12 +74,40 @@
                                 <td class="text-center font-mono">{{ $solicitud->examenes_count }}</td>
                                 <td class="text-center font-mono">{{ $solicitud->articulos_count }}</td>
                                 <td>
-                                    <div class="flex gap-1 justify-end">
-                                        <a href="{{ route('admin.solicitudes.envio.show', $solicitud->ID_SOLICITUD) }}"
-                                            class="btn btn-primary btn-xs gap-1" title="Armar envío">
-                                            <x-heroicon-o-truck class="w-4 h-4" />
-                                            Armar envío
-                                        </a>
+                                    <div class="flex gap-1 justify-end flex-wrap">
+                                        @if($solicitud->ESTADO_SOLICITUD === 'pendiente')
+                                            <a href="{{ route('admin.solicitudes.envio.show', $solicitud->ID_SOLICITUD) }}"
+                                                class="btn btn-primary btn-xs gap-1" title="Armar envío">
+                                                <x-heroicon-o-truck class="w-4 h-4" />
+                                                Armar envío
+                                            </a>
+                                        @else
+                                            <a href="{{ route('admin.solicitudes.envio.show', $solicitud->ID_SOLICITUD) }}"
+                                                class="btn btn-outline btn-xs gap-1" title="Editar envío">
+                                                <x-heroicon-o-truck class="w-4 h-4" />
+                                                Editar envío
+                                            </a>
+                                            <a href="{{ route('admin.solicitudes.carta', $solicitud->ID_SOLICITUD) }}"
+                                                class="btn btn-outline btn-xs gap-1" title="Descargar carta de envío">
+                                                <x-heroicon-o-document-arrow-down class="w-4 h-4" />
+                                                Carta
+                                            </a>
+                                        @endif
+
+                                        @if($solicitud->ESTADO_SOLICITUD === 'enviada')
+                                            <a href="{{ route('admin.solicitudes.devolucion.show', $solicitud->ID_SOLICITUD) }}"
+                                                class="btn btn-secondary btn-xs gap-1" title="Procesar devolución">
+                                                <x-heroicon-o-arrow-uturn-left class="w-4 h-4" />
+                                                Procesar devolución
+                                            </a>
+                                        @elseif($solicitud->ESTADO_SOLICITUD === 'retornada')
+                                            <a href="{{ route('admin.solicitudes.facturacion.show', $solicitud->ID_SOLICITUD) }}"
+                                                class="btn btn-primary btn-xs gap-1" title="Ir a facturación">
+                                                <x-heroicon-o-banknotes class="w-4 h-4" />
+                                                Facturación
+                                            </a>
+                                        @endif
+
                                         <a href="{{ route('admin.solicitudes.show', $solicitud->ID_SOLICITUD) }}"
                                             class="btn btn-outline btn-xs" title="Ver detalle">
                                             <x-heroicon-o-eye class="w-4 h-4" />
@@ -137,12 +165,39 @@
                                     </div>
                                 </div>
 
-                                <div class="flex gap-2">
-                                    <a href="{{ route('admin.solicitudes.envio.show', $solicitud->ID_SOLICITUD) }}"
-                                        class="btn btn-primary btn-sm gap-1 flex-1">
-                                        <x-heroicon-o-truck class="w-4 h-4" />
-                                        Armar envío
-                                    </a>
+                                <div class="flex gap-2 flex-wrap">
+                                    @if($solicitud->ESTADO_SOLICITUD === 'pendiente')
+                                        <a href="{{ route('admin.solicitudes.envio.show', $solicitud->ID_SOLICITUD) }}"
+                                            class="btn btn-primary btn-sm gap-1 flex-1">
+                                            <x-heroicon-o-truck class="w-4 h-4" />
+                                            Armar envío
+                                        </a>
+                                    @else
+                                        <a href="{{ route('admin.solicitudes.envio.show', $solicitud->ID_SOLICITUD) }}"
+                                            class="btn btn-outline btn-sm gap-1 flex-1">
+                                            <x-heroicon-o-truck class="w-4 h-4" />
+                                            Editar envío
+                                        </a>
+                                        <a href="{{ route('admin.solicitudes.carta', $solicitud->ID_SOLICITUD) }}"
+                                            class="btn btn-outline btn-sm gap-1">
+                                            <x-heroicon-o-document-arrow-down class="w-4 h-4" />
+                                        </a>
+                                    @endif
+
+                                    @if($solicitud->ESTADO_SOLICITUD === 'enviada')
+                                        <a href="{{ route('admin.solicitudes.devolucion.show', $solicitud->ID_SOLICITUD) }}"
+                                            class="btn btn-secondary btn-sm gap-1 flex-1">
+                                            <x-heroicon-o-arrow-uturn-left class="w-4 h-4" />
+                                            Devolución
+                                        </a>
+                                    @elseif($solicitud->ESTADO_SOLICITUD === 'retornada')
+                                        <a href="{{ route('admin.solicitudes.facturacion.show', $solicitud->ID_SOLICITUD) }}"
+                                            class="btn btn-primary btn-sm gap-1 flex-1">
+                                            <x-heroicon-o-banknotes class="w-4 h-4" />
+                                            Ir a facturación
+                                        </a>
+                                    @endif
+
                                     <a href="{{ route('admin.solicitudes.show', $solicitud->ID_SOLICITUD) }}"
                                         class="btn btn-outline btn-sm">
                                         <x-heroicon-o-eye class="w-4 h-4" />

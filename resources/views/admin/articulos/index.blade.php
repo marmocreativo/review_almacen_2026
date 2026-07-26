@@ -137,18 +137,20 @@
                                     </td>
                                     <td class="text-xs">{{ $fila['tipo_examen'] ?? '—' }}</td>
                                     <td>
-                                        <div class="flex items-center gap-1">
-                                            <span class="font-mono font-semibold">{{ $fila['cantidad_almacen'] }}</span>
+                                        <div x-data="{ open: false }">
+                                            <div class="flex items-center gap-1">
+                                                <span class="font-mono font-semibold">{{ $fila['cantidad_almacen'] }}</span>
+                                                @if($otras > 0)
+                                                    <button type="button" class="btn btn-ghost btn-xs btn-square" @click="open = !open">
+                                                        <span x-text="open ? '−' : '+'"></span>
+                                                    </button>
+                                                @endif
+                                            </div>
                                             @if($otras > 0)
-                                                <div class="dropdown dropdown-hover">
-                                                    <div tabindex="0" role="button" class="btn btn-ghost btn-xs btn-square">+</div>
-                                                    <div tabindex="0" class="dropdown-content z-10 card card-compact w-52 shadow bg-base-100 border border-base-300">
-                                                        <div class="card-body text-xs space-y-1">
-                                                            <p>Solicitudes: <strong>{{ $fila['cantidad_solicitudes'] }}</strong></p>
-                                                            <p>Destrucción: <strong>{{ $fila['cantidad_destruccion'] }}</strong></p>
-                                                            <p>Perdidos: <strong>{{ $fila['cantidad_perdidos'] }}</strong></p>
-                                                        </div>
-                                                    </div>
+                                                <div x-show="open" x-collapse class="text-xs bg-base-200 rounded p-2 mt-1 space-y-0.5 w-max">
+                                                    <p>Solicitudes: <strong>{{ $fila['cantidad_solicitudes'] }}</strong></p>
+                                                    <p>Destrucción: <strong>{{ $fila['cantidad_destruccion'] }}</strong></p>
+                                                    <p>Perdidos: <strong>{{ $fila['cantidad_perdidos'] }}</strong></p>
                                                 </div>
                                             @endif
                                         </div>
@@ -163,8 +165,13 @@
                                                 <button type="button" class="btn btn-outline btn-info btn-xs"
                                                     @click="abrirEdicionIndividual({{ $ids[0] }})">Editar</button>
                                             @endif
-                                            <a href="{{ route('admin.articulos.show', $ids[0]) }}"
-                                                class="btn btn-ghost btn-xs">Ver</a>
+                                            @if($esGrupo)
+                                                <a href="{{ route('admin.articulos.grupo.show', ['ids' => $ids]) }}"
+                                                    class="btn btn-ghost btn-xs">Ver grupo</a>
+                                            @else
+                                                <a href="{{ route('admin.articulos.show', $ids[0]) }}"
+                                                    class="btn btn-ghost btn-xs">Ver</a>
+                                            @endif
                                         </div>
                                     </td>
                                 </tr>

@@ -10,7 +10,7 @@ class SolicitudPago extends Model
     protected $table = 'al_solicitud_pagos';
     protected $primaryKey = 'ID_PAGO';
 
-    protected $fillable = ['ID_SOLICITUD', 'FECHA_PAGO', 'IMPORTE', 'NOTAS'];
+    protected $fillable = ['ID_SOLICITUD', 'FECHA_PAGO', 'IMPORTE', 'FORMA_PAGO', 'NOTAS'];
 
     protected $casts = [
         'FECHA_PAGO' => 'date',

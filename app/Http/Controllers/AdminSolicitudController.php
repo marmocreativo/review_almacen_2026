@@ -135,49 +135,105 @@ class AdminSolicitudController extends Controller
 
     public function create()
     {
-        $empresas = Empresa::where('estado', 'activo')->orderBy('nombre')->get();
-        return view('admin.solicitudes.create', compact('empresas'));
+        $empresas    = Empresa::where('estado', 'activo')->orderBy('nombre')->get();
+        $tiposExamen = TipoExamen::where('estado', 'activo')->orderBy('nombre')->get();
+        return view('admin.solicitudes.create', compact('empresas', 'tiposExamen'));
     }
 
     public function store(Request $request)
     {
         $request->validate([
-            'ID_EMPRESA'           => 'required|exists:empresas,id',
-            'ID_SEDE'              => 'required|exists:sedes,id',
-            'ID_CONTACTO'          => 'required|exists:contactos,id',
-            'RESPONSABLE_NOMBRE'   => 'required|string|max:255',
-            'RESPONSABLE_CORREO'   => 'nullable|email|max:255',
-            'RESPONSABLE_TELEFONO' => 'nullable|string|max:20',
-            'RESPONSABLE_CELULAR'  => 'nullable|string|max:20',
-            'DIRECCION_ENVIO'      => 'nullable|string',
-            'SESIONES_SIMULTANEAS' => 'required|in:si,no',
-            'HORARIO_DE_ATENCION'  => 'nullable|string',
-            'OBSERVACIONES'        => 'nullable|string',
-            'ENVIO_ZONA'           => 'nullable|in:cdmx_area_metropolitana,foraneo',
+            'ID_EMPRESA'                => 'required|exists:empresas,id',
+            'ID_SEDE'                   => 'required|exists:sedes,id',
+            'ID_CONTACTO'                => 'required|exists:contactos,id',
+            'RESPONSABLE_TITULO'         => 'nullable|string|max:255',
+            'RESPONSABLE_NOMBRE'         => 'required|string|max:255',
+            'RESPONSABLE_CORREO'         => 'nullable|email|max:255',
+            'RESPONSABLE_TELEFONO'       => 'nullable|string|max:20',
+            'DIRECCION_ENVIO'            => 'nullable|string',
+            'SESIONES_SIMULTANEAS'       => 'required|in:si,no',
+            'CANTIDAD_SIMULTANEAS'       => 'nullable|integer|min:1',
+            'FECHA_PRIMERA_APLICACION'   => 'required|date',
+            'CANTIDAD_USB'               => 'nullable|integer|min:0',
+            'CANTIDAD_CD'                => 'nullable|integer|min:0',
+            'OBSERVACIONES'              => 'nullable|string',
+            'ENVIO_ZONA'                 => 'required|in:cdmx_area_metropolitana,foraneo',
+            'examenes'                   => 'required|array|min:1',
+            'examenes.*.tipo_examen_id'  => 'required|exists:tipo_examenes,id',
+            'examenes.*.cantidad'        => 'required|integer|min:1',
         ]);
 
-        $solicitud = Solicitud::create([
-            'ID_EMPRESA'              => $request->ID_EMPRESA,
-            'ID_SEDE'                 => $request->ID_SEDE,
-            'ID_CONTACTO'             => $request->ID_CONTACTO,
-            'RESPONSABLE_NOMBRE'      => $request->RESPONSABLE_NOMBRE,
-            'RESPONSABLE_CORREO'      => $request->RESPONSABLE_CORREO ?? '',
-            'RESPONSABLE_TELEFONO'    => $request->RESPONSABLE_TELEFONO ?? '',
-            'RESPONSABLE_CELULAR'     => $request->RESPONSABLE_CELULAR ?? '',
-            'DIRECCION_ENVIO'         => $request->DIRECCION_ENVIO ?? '',
-            'SESIONES_SIMULTANEAS'    => $request->SESIONES_SIMULTANEAS,
-            'HORARIO_DE_ATENCION'     => $request->HORARIO_DE_ATENCION ?? '',
-            'OBSERVACIONES'           => $request->OBSERVACIONES ?? '',
-            'ENVIO_ZONA'              => $request->ENVIO_ZONA,
-            'CANTIDAD_EXAMENES'       => 0,
-            'CANTIDAD_EXAMENES_APLICADOS' => 0,
-            'ESTADO_SOLICITUD'        => 'pendiente',
-            'ESTADO_FACTURA'          => 'pendiente',
-            'FECHA_SOLICITUD'         => now(),
-        ]);
+        // Validar fecha mínima según zona (10 días metropolitana, 15 foráneo)
+        $diasMinimos = $request->ENVIO_ZONA === 'cdmx_area_metropolitana' ? 10 : 15;
+        $fechaMinima = Carbon::now()->addDays($diasMinimos)->format('Y-m-d');
+
+        if ($request->FECHA_PRIMERA_APLICACION < $fechaMinima) {
+            return back()->withInput()->withErrors([
+                'FECHA_PRIMERA_APLICACION' => "La fecha mínima de primer aplicación para esta zona es {$fechaMinima} ({$diasMinimos} días de anticipación).",
+            ]);
+        }
+
+        $solicitud = DB::transaction(function () use ($request) {
+            // Nombres de examen agrupados (sin duplicados) y total de candidatos
+            $tipos = TipoExamen::whereIn('id', collect($request->examenes)->pluck('tipo_examen_id'))
+                ->get()
+                ->keyBy('id');
+
+            $nombresExamenes = collect($request->examenes)
+                ->pluck('tipo_examen_id')
+                ->unique()
+                ->map(fn($id) => $tipos[$id]->nombre)
+                ->implode(', ');
+
+            $totalCandidatos = collect($request->examenes)->sum('cantidad');
+
+            $solicitud = Solicitud::create([
+                'ID_EMPRESA'              => $request->ID_EMPRESA,
+                'ID_SEDE'                 => $request->ID_SEDE,
+                'ID_CONTACTO'             => $request->ID_CONTACTO,
+                'RESPONSABLE_TITULO'      => $request->RESPONSABLE_TITULO ?? '',
+                'RESPONSABLE_NOMBRE'      => $request->RESPONSABLE_NOMBRE,
+                'RESPONSABLE_CORREO'      => $request->RESPONSABLE_CORREO ?? '',
+                'RESPONSABLE_TELEFONO'    => $request->RESPONSABLE_TELEFONO ?? '',
+                'RESPONSABLE_CELULAR'     => '',
+                'DIRECCION_ENVIO'         => $request->DIRECCION_ENVIO ?? '',
+                'SESIONES_SIMULTANEAS'    => $request->SESIONES_SIMULTANEAS,
+                'CANTIDAD_SIMULTANEAS'    => $request->CANTIDAD_SIMULTANEAS ?? null,
+                'HORARIO_DE_ATENCION'     => '',
+                'FECHA_PRIMERA_APLICACION'=> $request->FECHA_PRIMERA_APLICACION,
+                'CANTIDAD_USB'            => $request->CANTIDAD_USB ?? 0,
+                'CANTIDAD_CD'             => $request->CANTIDAD_CD ?? 0,
+                'OBSERVACIONES'           => $request->OBSERVACIONES ?? '',
+                'ENVIO_ZONA'              => $request->ENVIO_ZONA,
+                'ENVIO_EXAMEN'            => $nombresExamenes,
+                'ENVIO_NUMERO_HOJAS'      => $totalCandidatos,
+                'CANTIDAD_EXAMENES'       => 0,
+                'CANTIDAD_EXAMENES_APLICADOS' => 0,
+                'ESTADO_SOLICITUD'        => 'pendiente',
+                'APROBACION'              => 'aprobada',
+                'ESTADO_FACTURA'          => 'pendiente',
+                'FECHA_SOLICITUD'         => now(),
+            ]);
+
+            foreach ($request->examenes as $fila) {
+                $tipo = $tipos[$fila['tipo_examen_id']];
+
+                SolicitudExamen::create([
+                    'ID_SOLICITUD' => $solicitud->ID_SOLICITUD,
+                    'EXAMEN'       => $tipo->nombre,
+                    'CANTIDAD'     => $fila['cantidad'],
+                    'ESTADO'       => 'pendiente',
+                    'FECHA'        => $request->FECHA_PRIMERA_APLICACION,
+                ]);
+
+                $solicitud->increment('CANTIDAD_EXAMENES', $fila['cantidad']);
+            }
+
+            return $solicitud;
+        });
 
         return redirect()->route('admin.solicitudes.envio.show', $solicitud->ID_SOLICITUD)
-            ->with('success', 'Solicitud creada. Ahora agrega los exámenes y artículos en la pestaña Envío.');
+            ->with('success', 'Solicitud creada con sus exámenes. Ahora agrega los artículos en la pestaña Envío.');
     }
 
     // ── PESTAÑA: DATOS GENERALES ──
@@ -192,33 +248,45 @@ class AdminSolicitudController extends Controller
     public function updateDatos(Request $request, Solicitud $solicitud)
     {
         $request->validate([
-            'ID_EMPRESA'           => 'required|exists:empresas,id',
-            'ID_SEDE'              => 'required|exists:sedes,id',
-            'ID_CONTACTO'          => 'required|exists:contactos,id',
-            'RESPONSABLE_NOMBRE'   => 'required|string|max:255',
-            'RESPONSABLE_CORREO'   => 'nullable|email|max:255',
-            'RESPONSABLE_TELEFONO' => 'nullable|string|max:20',
-            'RESPONSABLE_CELULAR'  => 'nullable|string|max:20',
-            'DIRECCION_ENVIO'      => 'nullable|string',
-            'SESIONES_SIMULTANEAS' => 'required|in:si,no',
-            'HORARIO_DE_ATENCION'  => 'nullable|string',
-            'OBSERVACIONES'        => 'nullable|string',
-            'ENVIO_ZONA'           => 'nullable|in:cdmx_area_metropolitana,foraneo',
+            'ID_EMPRESA'                => 'required|exists:empresas,id',
+            'ID_SEDE'                   => 'required|exists:sedes,id',
+            'ID_CONTACTO'               => 'required|exists:contactos,id',
+            'RESPONSABLE_TITULO'        => 'nullable|string|max:255',
+            'RESPONSABLE_NOMBRE'        => 'required|string|max:255',
+            'RESPONSABLE_CORREO'        => 'nullable|email|max:255',
+            'RESPONSABLE_TELEFONO'      => 'nullable|string|max:20',
+            'RESPONSABLE_CELULAR'       => 'nullable|string|max:20',
+            'DIRECCION_ENVIO'           => 'nullable|string',
+            'SESIONES_SIMULTANEAS'      => 'required|in:si,no',
+            'CANTIDAD_SIMULTANEAS'      => 'nullable|integer|min:1',
+            'FECHA_PRIMERA_APLICACION'  => 'required|date',
+            'CANTIDAD_USB'              => 'nullable|integer|min:0',
+            'CANTIDAD_CD'               => 'nullable|integer|min:0',
+            'HORARIO_DE_ATENCION'       => 'nullable|string',
+            'OBSERVACIONES'             => 'nullable|string',
+            'ENVIO_ZONA'                => 'nullable|in:cdmx_area_metropolitana,foraneo',
+            'APROBACION'                => 'required|in:pendiente,aprobada,cancelada',
         ]);
 
         $solicitud->update([
-            'ID_EMPRESA'           => $request->ID_EMPRESA,
-            'ID_SEDE'              => $request->ID_SEDE,
-            'ID_CONTACTO'          => $request->ID_CONTACTO,
-            'RESPONSABLE_NOMBRE'   => $request->RESPONSABLE_NOMBRE,
-            'RESPONSABLE_CORREO'   => $request->RESPONSABLE_CORREO ?? '',
-            'RESPONSABLE_TELEFONO' => $request->RESPONSABLE_TELEFONO ?? '',
-            'RESPONSABLE_CELULAR'  => $request->RESPONSABLE_CELULAR ?? '',
-            'DIRECCION_ENVIO'      => $request->DIRECCION_ENVIO ?? '',
-            'SESIONES_SIMULTANEAS' => $request->SESIONES_SIMULTANEAS,
-            'HORARIO_DE_ATENCION'  => $request->HORARIO_DE_ATENCION ?? '',
-            'OBSERVACIONES'        => $request->OBSERVACIONES ?? '',
-            'ENVIO_ZONA'           => $request->ENVIO_ZONA,
+            'ID_EMPRESA'               => $request->ID_EMPRESA,
+            'ID_SEDE'                  => $request->ID_SEDE,
+            'ID_CONTACTO'              => $request->ID_CONTACTO,
+            'RESPONSABLE_TITULO'       => $request->RESPONSABLE_TITULO ?? '',
+            'RESPONSABLE_NOMBRE'       => $request->RESPONSABLE_NOMBRE,
+            'RESPONSABLE_CORREO'       => $request->RESPONSABLE_CORREO ?? '',
+            'RESPONSABLE_TELEFONO'     => $request->RESPONSABLE_TELEFONO ?? '',
+            'RESPONSABLE_CELULAR'      => $request->RESPONSABLE_CELULAR ?? '',
+            'DIRECCION_ENVIO'          => $request->DIRECCION_ENVIO ?? '',
+            'SESIONES_SIMULTANEAS'     => $request->SESIONES_SIMULTANEAS,
+            'CANTIDAD_SIMULTANEAS'     => $request->CANTIDAD_SIMULTANEAS ?? null,
+            'FECHA_PRIMERA_APLICACION' => $request->FECHA_PRIMERA_APLICACION,
+            'CANTIDAD_USB'             => $request->CANTIDAD_USB ?? 0,
+            'CANTIDAD_CD'              => $request->CANTIDAD_CD ?? 0,
+            'HORARIO_DE_ATENCION'      => $request->HORARIO_DE_ATENCION ?? '',
+            'OBSERVACIONES'            => $request->OBSERVACIONES ?? '',
+            'ENVIO_ZONA'               => $request->ENVIO_ZONA,
+            'APROBACION'               => $request->APROBACION,
         ]);
 
         return redirect()->route('admin.solicitudes.show', $solicitud->ID_SOLICITUD)
@@ -228,7 +296,7 @@ class AdminSolicitudController extends Controller
     // ── PESTAÑA: ENVÍO ──
     public function showEnvio(Solicitud $solicitud)
     {
-        $solicitud->load(['empresa', 'sede', 'examenes.articulos']);
+        $solicitud->load(['empresa', 'sede', 'contacto', 'examenes.articulos']);
         $tipoExamenes = TipoExamen::where('estado', 'activo')->orderBy('nombre')->get();
 
         $examenesData = $solicitud->examenes->map(function ($examen) {
@@ -309,6 +377,7 @@ class AdminSolicitudController extends Controller
                     'cantidad_enviada' => $items->sum('CANTIDAD_ENVIADA'),
                     'ids'     => $items->pluck('ID')->toArray(),
                     'estado'  => $primero->ESTADO,
+                    'items'   => $items->map(fn($i) => ['id' => $i->ID, 'serie' => $i->SERIE ?: '—', 'cantidad' => $i->CANTIDAD_ENVIADA])->values()->toArray(),
                 ]);
                 continue;
             }
@@ -358,6 +427,7 @@ class AdminSolicitudController extends Controller
             'cantidad_enviada' => $items->count(),
             'ids'     => $items->pluck('ID')->toArray(),
             'estado'  => $primero->ESTADO,
+            'items'   => $items->map(fn($i) => ['id' => $i->ID, 'serie' => $i->SERIE])->values()->toArray(),
         ];
     }
 
@@ -508,11 +578,19 @@ class AdminSolicitudController extends Controller
             'FACTURACION_NOTAS'         => 'nullable|string',
         ]);
 
+        $vencimiento = null;
+        if ($request->filled('FACTURACION_FECHA') && $request->filled('FACTURACION_DIAS_CREDITO')) {
+            $vencimiento = \Carbon\Carbon::parse($request->FACTURACION_FECHA)
+                ->addDays((int) $request->FACTURACION_DIAS_CREDITO)
+                ->format('Y-m-d');
+        }
+
         $solicitud->update([
-            'ESTADO_FACTURA'           => $request->ESTADO_FACTURA,
-            'FACTURACION_FECHA'        => $request->FACTURACION_FECHA,
-            'FACTURACION_DIAS_CREDITO' => $request->FACTURACION_DIAS_CREDITO,
-            'FACTURACION_NOTAS'        => $request->FACTURACION_NOTAS ?? '',
+            'ESTADO_FACTURA'             => $request->ESTADO_FACTURA,
+            'FACTURACION_FECHA'          => $request->FACTURACION_FECHA,
+            'FACTURACION_DIAS_CREDITO'   => $request->FACTURACION_DIAS_CREDITO,
+            'FACTURACION_NOTAS'          => $request->FACTURACION_NOTAS ?? '',
+            'FECHA_VENCIMIENTO_COBRANZA' => $vencimiento,
         ]);
 
         return redirect()->route('admin.solicitudes.facturacion.show', $solicitud->ID_SOLICITUD)
@@ -722,50 +800,7 @@ class AdminSolicitudController extends Controller
 
         DB::transaction(function () use ($request, $solicitud, $examen, &$agregados, &$noAgregados) {
             foreach ($request->entradas as $entrada) {
-                $entrada = strtoupper(trim($entrada));
-
-                // Rango: S000000001-S000000010 (ambos lados con S + 9 dígitos)
-                if (preg_match('/^S(\d{9})-S(\d{9})$/', $entrada, $m)) {
-                    $inicio = (int) $m[1];
-                    $fin    = (int) $m[2];
-
-                    if ($fin < $inicio) {
-                        $noAgregados[] = "{$entrada}: el folio final debe ser mayor o igual al inicial.";
-                        continue;
-                    }
-                    if (($fin - $inicio) > 2000) {
-                        $noAgregados[] = "{$entrada}: rango demasiado grande (máx. 2000 folios).";
-                        continue;
-                    }
-
-                    for ($n = $inicio; $n <= $fin; $n++) {
-                        $serie = 'S' . str_pad((string) $n, 9, '0', STR_PAD_LEFT);
-                        $this->agregarPorSerie($serie, $solicitud, $examen, $agregados, $noAgregados);
-                    }
-                    continue;
-                }
-
-                // Folio individual: S000000001 o S000000001-8 (dígito verificador)
-                if (preg_match('/^S(\d{9})(?:-\d+)?$/', $entrada)) {
-                    $this->agregarPorSerie($entrada, $solicitud, $examen, $agregados, $noAgregados);
-                    continue;
-                }
-
-                // Si no matchea patrón de folio, se trata como ID Item (opcionalmente con :cantidad)
-                $cantidadSolicitada = null;
-                $idItemEntrada = $entrada;
-
-                if (str_contains($entrada, ':')) {
-                    [$idItemEntrada, $cantidadTexto] = array_map('trim', explode(':', $entrada, 2));
-
-                    if (!ctype_digit($cantidadTexto) || (int) $cantidadTexto < 1) {
-                        $noAgregados[] = "{$entrada}: la cantidad indicada no es válida.";
-                        continue;
-                    }
-                    $cantidadSolicitada = (int) $cantidadTexto;
-                }
-
-                $this->agregarPorIdItem($idItemEntrada, $solicitud, $examen, $agregados, $noAgregados, $cantidadSolicitada);
+                $this->procesarEntradaArticulo($entrada, $solicitud, $examen, $agregados, $noAgregados);
             }
         });
 
@@ -776,12 +811,96 @@ class AdminSolicitudController extends Controller
         return response()->json(['success' => true, 'agregados' => $agregados, 'no_agregados' => $noAgregados]);
     }
 
+    // ── REVISAR ARTÍCULOS (dry-run: no persiste nada) ──
+    public function revisarArticulos(Request $request, Solicitud $solicitud, SolicitudExamen $examen)
+    {
+        if (!$solicitud->isPendiente()) {
+            return response()->json(['message' => 'La solicitud no es editable.'], 403);
+        }
+
+        $request->validate([
+            'entradas'   => 'required|array|min:1',
+            'entradas.*' => 'required|string|max:255',
+        ]);
+
+        $agregados   = [];
+        $noAgregados = [];
+
+        try {
+            DB::transaction(function () use ($request, $solicitud, $examen, &$agregados, &$noAgregados) {
+                foreach ($request->entradas as $entrada) {
+                    $this->procesarEntradaArticulo($entrada, $solicitud, $examen, $agregados, $noAgregados);
+                }
+                // Forzamos rollback: esto es solo una revisión, nada debe quedar guardado.
+                throw new \RuntimeException('__dry_run_rollback__');
+            });
+        } catch (\RuntimeException $e) {
+            if ($e->getMessage() !== '__dry_run_rollback__') {
+                throw $e;
+            }
+        }
+
+        return response()->json(['agregados' => $agregados, 'no_agregados' => $noAgregados]);
+    }
+
+    private function procesarEntradaArticulo(string $entrada, Solicitud $solicitud, SolicitudExamen $examen, array &$agregados, array &$noAgregados): void
+    {
+        $entrada = strtoupper(trim($entrada));
+
+        // Rango: S000000001-S000000010 (ambos lados con S + 9 dígitos)
+        if (preg_match('/^S(\d{9})-S(\d{9})$/', $entrada, $m)) {
+            $inicio = (int) $m[1];
+            $fin    = (int) $m[2];
+
+            if ($fin < $inicio) {
+                $noAgregados[] = "{$entrada}: el folio final debe ser mayor o igual al inicial.";
+                return;
+            }
+            if (($fin - $inicio) > 2000) {
+                $noAgregados[] = "{$entrada}: rango demasiado grande (máx. 2000 folios).";
+                return;
+            }
+
+            for ($n = $inicio; $n <= $fin; $n++) {
+                $serie = 'S' . str_pad((string) $n, 9, '0', STR_PAD_LEFT);
+                $this->agregarPorSerie($serie, $solicitud, $examen, $agregados, $noAgregados);
+            }
+            return;
+        }
+
+        // Folio individual: S000000001 o S000000001-8 (dígito verificador)
+        if (preg_match('/^S(\d{9})(?:-\d+)?$/', $entrada)) {
+            $this->agregarPorSerie($entrada, $solicitud, $examen, $agregados, $noAgregados);
+            return;
+        }
+
+        // Si no matchea patrón de folio, se trata como ID Item (opcionalmente con :cantidad)
+        $cantidadSolicitada = null;
+        $idItemEntrada = $entrada;
+
+        if (str_contains($entrada, ':')) {
+            [$idItemEntrada, $cantidadTexto] = array_map('trim', explode(':', $entrada, 2));
+
+            if (!ctype_digit($cantidadTexto) || (int) $cantidadTexto < 1) {
+                $noAgregados[] = "{$entrada}: la cantidad indicada no es válida.";
+                return;
+            }
+            $cantidadSolicitada = (int) $cantidadTexto;
+        }
+
+        $this->agregarPorIdItem($idItemEntrada, $solicitud, $examen, $agregados, $noAgregados, $cantidadSolicitada);
+    }
+
     private function agregarPorSerie(string $serie, Solicitud $solicitud, SolicitudExamen $examen, array &$agregados, array &$noAgregados): void
     {
         $articulo = Articulo::where('SERIE', $serie)->first();
 
         if (!$articulo) {
             $noAgregados[] = "{$serie}: no existe en inventario.";
+            return;
+        }
+        if ($solicitud->ENVIO_VERSION && $articulo->FORMATO && $articulo->FORMATO !== $solicitud->ENVIO_VERSION) {
+            $noAgregados[] = "{$serie}: el formato del artículo ({$articulo->FORMATO}) no coincide con la versión de la solicitud ({$solicitud->ENVIO_VERSION}).";
             return;
         }
         if ($articulo->CANTIDAD_ALMACEN < 1) {
@@ -812,7 +931,8 @@ class AdminSolicitudController extends Controller
         $articulo->decrement('CANTIDAD_ALMACEN');
         $articulo->increment('CANTIDAD_SOLICITUDES');
 
-        $agregados[] = $serie;
+        $formatoTxt = $articulo->FORMATO ?: 'sin formato';
+        $agregados[] = "{$serie} (formato: {$formatoTxt})";
     }
 
     private function agregarPorIdItem(string $idItem, Solicitud $solicitud, SolicitudExamen $examen, array &$agregados, array &$noAgregados, ?int $cantidadSolicitada = null): void
@@ -847,6 +967,12 @@ class AdminSolicitudController extends Controller
 
         // A granel
         $articulo = $articulos->first();
+
+        if ($solicitud->ENVIO_VERSION && $articulo->FORMATO && $articulo->FORMATO !== $solicitud->ENVIO_VERSION) {
+            $noAgregados[] = "{$idItem}: el formato del artículo ({$articulo->FORMATO}) no coincide con la versión de la solicitud ({$solicitud->ENVIO_VERSION}).";
+            return;
+        }
+
         $cantidad = $cantidadSolicitada ?? $articulo->CANTIDAD_ALMACEN;
 
         if ($articulo->CANTIDAD_ALMACEN < 1) {
@@ -882,7 +1008,8 @@ class AdminSolicitudController extends Controller
         $articulo->decrement('CANTIDAD_ALMACEN', $cantidad);
         $articulo->increment('CANTIDAD_SOLICITUDES', $cantidad);
 
-        $agregados[] = "{$idItem} (x{$cantidad})";
+        $formatoTxt = $articulo->FORMATO ?: 'sin formato';
+        $agregados[] = "{$idItem} (x{$cantidad}, formato: {$formatoTxt})";
     }
 
     // ── ELIMINAR ARTÍCULO DE SOLICITUD ──
@@ -907,11 +1034,14 @@ class AdminSolicitudController extends Controller
     {
         $request->validate([
             'id_caja_destino'              => 'nullable|integer|exists:al_cajas,ID',
+            'reedicion'                    => 'nullable|boolean',
             'items'                        => 'required|array',
             'items.*.id'                   => 'required|integer|exists:al_solicitudes_articulos,ID',
             'items.*.estado_devolucion'    => 'required|in:aplicado,no_aplicado,danado,faltante',
             'items.*.nombre_candidato'     => 'nullable|string|max:255',
         ]);
+
+        $esReedicion = $request->boolean('reedicion');
 
         // Validar que la caja elegida (si viene) siga abierta
         $cajaElegida = null;
@@ -923,19 +1053,39 @@ class AdminSolicitudController extends Controller
         }
 
         $resumen = [];
+        $cambios = []; // solo para reedición: registro de qué cambió
 
-        DB::transaction(function () use ($request, $solicitud, $cajaElegida, &$resumen) {
+        DB::transaction(function () use ($request, $solicitud, $cajaElegida, $esReedicion, &$resumen, &$cambios) {
             $cajaParaDestruccion = $cajaElegida;
 
             foreach ($request->items as $itemData) {
                 $sa = SolicitudArticulo::find($itemData['id']);
 
-                if (!$sa || $sa->ID_SOLICITUD != $solicitud->ID_SOLICITUD || $sa->isRetornado()) {
+                if (!$sa || $sa->ID_SOLICITUD != $solicitud->ID_SOLICITUD) {
                     continue;
                 }
 
-                $estado   = $itemData['estado_devolucion'];
-                $cantidad = $sa->CANTIDAD_ENVIADA;
+                $yaEstabaRetornado = $sa->isRetornado();
+
+                // Si ya estaba retornado y NO es una reedición explícita, se omite (comportamiento normal).
+                if ($yaEstabaRetornado && !$esReedicion) {
+                    continue;
+                }
+
+                $articulo = Articulo::find($sa->ID_ARTICULO);
+
+                // Si es reedición de un artículo ya retornado, primero revertimos su efecto anterior en inventario.
+                if ($yaEstabaRetornado && $esReedicion && $articulo) {
+                    $articulo->decrement('CANTIDAD_ALMACEN', $sa->CANTIDAD_A_ALMACEN);
+                    $articulo->decrement('CANTIDAD_DESTRUCCION', $sa->CANTIDAD_A_DESTRUCCION);
+                    $articulo->decrement('CANTIDAD_PERDIDOS', $sa->CANTIDAD_PERDIDOS);
+                    $articulo->increment('CANTIDAD_SOLICITUDES', $sa->CANTIDAD_ENVIADA);
+                    $articulo->refresh();
+                }
+
+                $estadoAnterior = $sa->ESTADO_DEVOLUCION;
+                $estado         = $itemData['estado_devolucion'];
+                $cantidad       = $sa->CANTIDAD_ENVIADA;
 
                 $aAlmacen = $aDestruccion = $aPerdidos = 0;
                 $ubicacion = '';
@@ -968,7 +1118,6 @@ class AdminSolicitudController extends Controller
                     'ESTADO'                 => 'retornado',
                 ]);
 
-                $articulo = Articulo::find($sa->ID_ARTICULO);
                 if ($articulo) {
                     $articulo->increment('CANTIDAD_ALMACEN', $aAlmacen);
                     $articulo->increment('CANTIDAD_DESTRUCCION', $aDestruccion);
@@ -976,9 +1125,22 @@ class AdminSolicitudController extends Controller
                     $articulo->decrement('CANTIDAD_SOLICITUDES', $cantidad);
                 }
 
-                $resumen[] = ($articulo?->FOLIO ?? "ID {$sa->ID_ARTICULO}")
-                    . ($articulo?->SERIE ? " ({$articulo->SERIE})" : '')
-                    . " → {$estado}";
+                $descripcionArticulo = ($articulo?->FOLIO ?? "ID {$sa->ID_ARTICULO}")
+                    . ($articulo?->SERIE ? " ({$articulo->SERIE})" : '');
+
+                if ($yaEstabaRetornado && $esReedicion) {
+                    $cambios[] = "{$descripcionArticulo}: {$estadoAnterior} → {$estado}";
+                } else {
+                    $resumen[] = "{$descripcionArticulo} → {$estado}";
+                }
+            }
+
+            // Si todos los artículos de la solicitud ya quedaron retornados, se marca la solicitud como retornada automáticamente.
+            $totalArticulos   = $solicitud->articulos()->count();
+            $totalRetornados  = $solicitud->articulos()->where('ESTADO', 'retornado')->count();
+
+            if ($totalArticulos > 0 && $totalArticulos === $totalRetornados && $solicitud->ESTADO_SOLICITUD !== 'retornada') {
+                $solicitud->update(['ESTADO_SOLICITUD' => 'retornada']);
             }
         });
 
@@ -991,13 +1153,27 @@ class AdminSolicitudController extends Controller
                     'id_solicitud' => $solicitud->ID_SOLICITUD,
                     'cliente'      => $solicitud->empresa?->nombre ?? 'Sin cliente',
                     'total'        => count($resumen),
-                    'items'        => array_slice($resumen, 0, 20), // cap para no inflar el JSON en devoluciones grandes
+                    'items'        => array_slice($resumen, 0, 20),
+                ]
+            );
+        }
+
+        if (!empty($cambios)) {
+            Bitacora::registrar('solicitudes', 'reeditar_devolucion',
+                "Reeditó la devolución de " . count($cambios) . " artículo(s) de la solicitud #{$solicitud->ID_SOLICITUD}"
+                    . ($solicitud->empresa ? " de {$solicitud->empresa->nombre}" : ''),
+                $solicitud->ID_SOLICITUD,
+                [
+                    'id_solicitud' => $solicitud->ID_SOLICITUD,
+                    'cliente'      => $solicitud->empresa?->nombre ?? 'Sin cliente',
+                    'total'        => count($cambios),
+                    'cambios'      => array_slice($cambios, 0, 20),
                 ]
             );
         }
 
         return redirect()->route('admin.solicitudes.devolucion.show', $solicitud->ID_SOLICITUD)
-            ->with('success', 'Devolución procesada correctamente.');
+            ->with('success', $esReedicion ? 'Devolución reeditada correctamente.' : 'Devolución procesada correctamente.');
     }
 
 /**
@@ -1070,12 +1246,14 @@ private function obtenerCajaAbierta(): Caja
     {
         $request->validate([
             'IMPORTE_FACTURA' => 'required|numeric|min:0',
+            'FOLIO_FACTURA'   => 'nullable|string|max:100',
             'FACTURA_PDF'     => 'nullable|file|mimes:pdf|max:10240',
             'FACTURA_XML'     => 'nullable|file|mimes:xml,text|max:5120',
         ]);
 
         $datos = [
             'IMPORTE_FACTURA' => $request->IMPORTE_FACTURA,
+            'FOLIO_FACTURA'   => $request->FOLIO_FACTURA ?? '',
             'ESTADO_FACTURA'  => 'facturada',
         ];
 
@@ -1268,8 +1446,11 @@ public function generarCartaWord(Solicitud $solicitud)
     {
         $request->validate([
             'FECHA_PAGO' => 'required|date',
-            'IMPORTE'    => 'required|numeric|min:0.01',
+            'IMPORTE'    => 'required|numeric|min:0.01|max:' . max($solicitud->saldoPendiente(), 0),
+            'FORMA_PAGO' => 'nullable|string|max:100',
             'NOTAS'      => 'nullable|string|max:500',
+        ], [
+            'IMPORTE.max' => 'El importe no puede exceder el saldo pendiente ($' . number_format($solicitud->saldoPendiente(), 2) . ').',
         ]);
 
         if ($solicitud->ESTADO_FACTURA !== 'facturada') {
@@ -1279,6 +1460,7 @@ public function generarCartaWord(Solicitud $solicitud)
         $solicitud->pagos()->create([
             'FECHA_PAGO' => $request->FECHA_PAGO,
             'IMPORTE'    => $request->IMPORTE,
+            'FORMA_PAGO' => $request->FORMA_PAGO ?? '',
             'NOTAS'      => $request->NOTAS ?? '',
         ]);
 

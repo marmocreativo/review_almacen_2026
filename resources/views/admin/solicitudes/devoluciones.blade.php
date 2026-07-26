@@ -42,7 +42,6 @@
                             <th>Responsable</th>
                             <th>Fecha solicitud</th>
                             <th class="text-center">Artículos</th>
-                            <th>Estado</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -64,11 +63,6 @@
                                 <td class="text-sm">{{ \Carbon\Carbon::parse($solicitud->FECHA_SOLICITUD)->format('d/m/Y') }}</td>
                                 <td class="text-center font-mono">{{ $solicitud->articulos_count }}</td>
                                 <td>
-                                    <span class="badge {{ $esEnviada ? 'badge-info' : 'badge-success' }}">
-                                        {{ $esEnviada ? 'Por retornar' : 'Devuelta' }}
-                                    </span>
-                                </td>
-                                <td>
                                     <div class="flex gap-1 justify-end">
                                         @if($esEnviada)
                                             <a href="{{ route('admin.solicitudes.devolucion.show', $solicitud->ID_SOLICITUD) }}"
@@ -76,12 +70,13 @@
                                                 <x-heroicon-o-inbox-arrow-down class="w-4 h-4" />
                                                 Procesar
                                             </a>
-                                            
+                                        @else
+                                            <a href="{{ route('admin.solicitudes.facturacion.show', $solicitud->ID_SOLICITUD) }}"
+                                                class="btn btn-primary btn-xs gap-1" title="Ir a facturación">
+                                                <x-heroicon-o-banknotes class="w-4 h-4" />
+                                                Facturación
+                                            </a>
                                         @endif
-                                        <a href="{{ route('admin.solicitudes.show', $solicitud->ID_SOLICITUD) }}"
-                                            class="btn btn-outline btn-xs" title="Ver detalle">
-                                            <x-heroicon-o-eye class="w-4 h-4" />
-                                        </a>
                                     </div>
                                 </td>
                             </tr>
@@ -140,19 +135,12 @@
                                             Procesar
                                         </a>
                                     @else
-                                        <form method="POST" action="{{ route('admin.solicitudes.estado', $solicitud->ID_SOLICITUD) }}" class="flex-1">
-                                            @csrf @method('PATCH')
-                                            <input type="hidden" name="estado" value="retornada">
-                                            <button type="submit" class="btn btn-info btn-sm gap-1 w-full">
-                                                <x-heroicon-o-arrow-uturn-left class="w-4 h-4" />
-                                                Marcar retornada
-                                            </button>
-                                        </form>
+                                        <a href="{{ route('admin.solicitudes.facturacion.show', $solicitud->ID_SOLICITUD) }}"
+                                            class="btn btn-primary btn-sm gap-1 flex-1">
+                                            <x-heroicon-o-banknotes class="w-4 h-4" />
+                                            Ir a facturación
+                                        </a>
                                     @endif
-                                    <a href="{{ route('admin.solicitudes.show', $solicitud->ID_SOLICITUD) }}"
-                                        class="btn btn-outline btn-sm">
-                                        <x-heroicon-o-eye class="w-4 h-4" />
-                                    </a>
                                 </div>
                             </div>
                         </div>

@@ -77,61 +77,128 @@
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                     <div class="form-control">
+                        <label class="label"><span class="label-text">Título</span></label>
+                        <input type="text" name="RESPONSABLE_TITULO"
+                            x-model="responsable.titulo"
+                            placeholder="Ej: Coordinador académico"
+                            class="input input-bordered @error('RESPONSABLE_TITULO') input-error @enderror" />
+                        @error('RESPONSABLE_TITULO')<p class="text-error text-sm mt-1">{{ $message }}</p>@enderror
+                    </div>
+                    <div class="form-control">
                         <label class="label"><span class="label-text">Nombre *</span></label>
                         <input type="text" name="RESPONSABLE_NOMBRE"
-                            :value="responsable.nombre"
+                            x-model="responsable.nombre"
                             class="input input-bordered @error('RESPONSABLE_NOMBRE') input-error @enderror" />
                         @error('RESPONSABLE_NOMBRE')<p class="text-error text-sm mt-1">{{ $message }}</p>@enderror
                     </div>
                     <div class="form-control">
                         <label class="label"><span class="label-text">Correo</span></label>
                         <input type="email" name="RESPONSABLE_CORREO"
-                            :value="responsable.correo"
+                            x-model="responsable.correo"
                             class="input input-bordered" />
                     </div>
                     <div class="form-control">
                         <label class="label"><span class="label-text">Teléfono</span></label>
                         <input type="text" name="RESPONSABLE_TELEFONO"
-                            :value="responsable.telefono"
-                            class="input input-bordered" />
-                    </div>
-                    <div class="form-control">
-                        <label class="label"><span class="label-text">Celular</span></label>
-                        <input type="text" name="RESPONSABLE_CELULAR"
-                            :value="responsable.celular"
+                            x-model="responsable.telefono"
                             class="input input-bordered" />
                     </div>
                 </div>
 
                 <div class="divider"></div>
 
+                {{-- Exámenes (repeater) --}}
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="font-semibold text-base">Exámenes</h3>
+                    <button type="button" class="btn btn-primary btn-xs" @click="agregarExamenFila()">
+                        + Agregar examen
+                    </button>
+                </div>
+
+                <div class="space-y-2 mb-2">
+                    <template x-for="(fila, index) in examenes" :key="fila.uid">
+                        <div class="grid grid-cols-1 sm:grid-cols-[1fr_140px_auto] gap-2 items-end">
+                            <div class="form-control">
+                                <label class="label py-1"><span class="label-text text-xs">Examen *</span></label>
+                                <select :name="`examenes[${index}][tipo_examen_id]`"
+                                    x-model="fila.tipo_examen_id"
+                                    class="select select-bordered select-sm w-full">
+                                    <option value="">Seleccionar...</option>
+                                    @foreach($tiposExamen as $te)
+                                        <option value="{{ $te->id }}">{{ $te->nombre }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="form-control">
+                                <label class="label py-1"><span class="label-text text-xs">Cantidad sesiones *</span></label>
+                                <input type="number" min="1" :name="`examenes[${index}][cantidad]`"
+                                    x-model="fila.cantidad"
+                                    class="input input-bordered input-sm w-full" />
+                            </div>
+                            <button type="button" class="btn btn-ghost btn-sm btn-square text-error"
+                                x-show="examenes.length > 1"
+                                @click="quitarExamenFila(index)">
+                                <x-heroicon-o-trash class="w-4 h-4" />
+                            </button>
+                        </div>
+                    </template>
+                </div>
+                @error('examenes')<p class="text-error text-sm mb-4">{{ $message }}</p>@enderror
+
+                <div class="divider"></div>
+
                 {{-- Logística --}}
                 <h3 class="font-semibold text-base mb-3">Logística</h3>
 
-                <div class="form-control mb-4">
-                    <label class="label"><span class="label-text">Dirección de envío</span></label>
-                    <textarea name="DIRECCION_ENVIO" rows="3"
-                        class="textarea textarea-bordered w-full">{{ old('DIRECCION_ENVIO') }}</textarea>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                    <div class="form-control">
+                        <label class="label"><span class="label-text">Fecha primer aplicación *</span></label>
+                        <input type="date" name="FECHA_PRIMERA_APLICACION" value="{{ old('FECHA_PRIMERA_APLICACION') }}"
+                            :min="fechaMinima"
+                            x-model="fechaPrimeraAplicacion"
+                            class="input input-bordered @error('FECHA_PRIMERA_APLICACION') input-error @enderror" />
+                        <p class="text-xs text-base-content/40 mt-1" x-show="sedeId" x-text="'Fecha mínima permitida: ' + fechaMinima + (envioZona === 'cdmx_area_metropolitana' ? ' (10 días, zona metropolitana)' : ' (15 días, foráneo)')"></p>
+                        @error('FECHA_PRIMERA_APLICACION')<p class="text-error text-sm mt-1">{{ $message }}</p>@enderror
+                    </div>
+                    <div class="form-control">
+                        <label class="label"><span class="label-text">Sesiones simultáneas</span></label>
+                        <select name="SESIONES_SIMULTANEAS" class="select select-bordered"
+                            x-model="sesionesSimultaneas">
+                            <option value="no">No</option>
+                            <option value="si">Sí</option>
+                        </select>
+                    </div>
+                    <div class="form-control" x-show="sesionesSimultaneas === 'si'" x-cloak>
+                        <label class="label"><span class="label-text">Cantidad de sesiones simultáneas</span></label>
+                        <input type="number" min="1" name="CANTIDAD_SIMULTANEAS" value="{{ old('CANTIDAD_SIMULTANEAS') }}"
+                            class="input input-bordered @error('CANTIDAD_SIMULTANEAS') input-error @enderror" />
+                        @error('CANTIDAD_SIMULTANEAS')<p class="text-error text-sm mt-1">{{ $message }}</p>@enderror
+                    </div>
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                     <div class="form-control">
-                        <label class="label"><span class="label-text">Sesiones simultáneas</span></label>
-                        <select name="SESIONES_SIMULTANEAS" class="select select-bordered">
-                            <option value="no" {{ old('SESIONES_SIMULTANEAS') === 'no' ? 'selected' : '' }}>No</option>
-                            <option value="si" {{ old('SESIONES_SIMULTANEAS') === 'si' ? 'selected' : '' }}>Sí</option>
-                        </select>
+                        <label class="label"><span class="label-text">Cantidad USB</span></label>
+                        <input type="number" min="0" name="CANTIDAD_USB" value="{{ old('CANTIDAD_USB', 0) }}"
+                            class="input input-bordered" />
                     </div>
                     <div class="form-control">
-                        <label class="label"><span class="label-text">Horario de atención</span></label>
-                        <input type="text" name="HORARIO_DE_ATENCION" value="{{ old('HORARIO_DE_ATENCION') }}"
-                            placeholder="Ej: 9:00 a 18:00 hrs"
+                        <label class="label"><span class="label-text">Cantidad CD</span></label>
+                        <input type="number" min="0" name="CANTIDAD_CD" value="{{ old('CANTIDAD_CD', 0) }}"
                             class="input input-bordered" />
                     </div>
                 </div>
 
                 <div class="form-control mb-6">
-                    <label class="label"><span class="label-text">Observaciones</span></label>
+                    <label class="label"><span class="label-text">Dirección de envío</span></label>
+                    <textarea name="DIRECCION_ENVIO" rows="3"
+                        x-model="direccionEnvio"
+                        class="textarea textarea-bordered w-full"></textarea>
+                    <p class="text-xs text-base-content/40 mt-1">Se precarga automáticamente al elegir la sede; puedes editarla.</p>
+                </div>
+
+                <div class="form-control mb-6">
+                    <label class="label"><span class="label-text">Observaciones / Notas</span></label>
                     <textarea name="OBSERVACIONES" rows="3"
                         class="textarea textarea-bordered w-full">{{ old('OBSERVACIONES') }}</textarea>
                 </div>
@@ -140,6 +207,7 @@
                     <button type="submit" class="btn btn-primary">Crear solicitud</button>
                     <a href="{{ route('admin.solicitudes.index') }}" class="btn btn-ghost">Cancelar</a>
                 </div>
+                <input type="hidden" name="ENVIO_ZONA" x-model="envioZona" />
             </form>
         </div>
     </div>
@@ -182,11 +250,11 @@
                     <input type="text" id="ns-calle" class="input input-bordered input-sm" />
                 </div>
                 <div class="form-control">
-                    <label class="label"><span class="label-text">Colonia</span></label>
+                    <label class="label"><span class="label-text">Colonia/Barrio</span></label>
                     <input type="text" id="ns-colonia" class="input input-bordered input-sm" />
                 </div>
                 <div class="form-control">
-                    <label class="label"><span class="label-text">Alcaldía / Municipio</span></label>
+                    <label class="label"><span class="label-text">Alcaldía/Municipio</span></label>
                     <input type="text" id="ns-alcaldia" class="input input-bordered input-sm" />
                 </div>
                 <div class="form-control">
@@ -198,7 +266,7 @@
                     <input type="text" id="ns-estado" class="input input-bordered input-sm" />
                 </div>
                 <div class="form-control">
-                    <label class="label"><span class="label-text">CP</span></label>
+                    <label class="label"><span class="label-text">Código postal</span></label>
                     <input type="text" id="ns-cp" class="input input-bordered input-sm" />
                 </div>
             </div>
@@ -241,10 +309,10 @@
     </dialog>
 
 <script>
-    const csrfToken   = '{{ csrf_token() }}';
-    const urlSedes    = '{{ url("admin/solicitudes/empresa") }}';
-    const urlContactos = '{{ url("admin/solicitudes/sede") }}';
-    const urlEmpresas  = '{{ route("admin.empresas.store") }}';
+    const csrfToken     = '{{ csrf_token() }}';
+    const urlSedes      = '{{ url("admin/solicitudes/empresa") }}';
+    const urlContactos  = '{{ url("admin/solicitudes/sede") }}';
+    const urlEmpresas   = '{{ route("admin.empresas.store") }}';
     const urlSedesStore = '{{ url("admin/empresas") }}';
 
     function solicitudForm() {
@@ -253,11 +321,46 @@
             sedeId: '',
             sedes: [],
             contactos: [],
+            direccionEnvio: '',
+            sesionesSimultaneas: 'no',
+            envioZona: '',
+            fechaMinima: '',
+            fechaPrimeraAplicacion: '',
             responsable: {
+                titulo: '',
                 nombre: '',
                 correo: '',
                 telefono: '',
-                celular: '',
+            },
+            examenes: [
+                { uid: crypto.randomUUID(), tipo_examen_id: '', cantidad: 1 },
+            ],
+
+            agregarExamenFila() {
+                this.examenes.push({ uid: crypto.randomUUID(), tipo_examen_id: '', cantidad: 1 });
+            },
+
+            quitarExamenFila(index) {
+                this.examenes.splice(index, 1);
+            },
+
+            calcularZona(estadoRepublica) {
+                const estadosMetropolitanos = ['ciudad de méxico', 'cdmx', 'estado de méxico', 'edomex', 'méxico'];
+                const normalizado = (estadoRepublica || '').toLowerCase().trim();
+                return estadosMetropolitanos.some(e => normalizado.includes(e))
+                    ? 'cdmx_area_metropolitana'
+                    : 'foraneo';
+            },
+
+            actualizarFechaMinima() {
+                const dias = this.envioZona === 'cdmx_area_metropolitana' ? 10 : 15;
+                const fecha = new Date();
+                fecha.setDate(fecha.getDate() + dias);
+                this.fechaMinima = fecha.toISOString().split('T')[0];
+
+                if (this.fechaPrimeraAplicacion && this.fechaPrimeraAplicacion < this.fechaMinima) {
+                    this.fechaPrimeraAplicacion = this.fechaMinima;
+                }
             },
 
             async onEmpresaChange(id) {
@@ -265,7 +368,8 @@
                 this.sedes = [];
                 this.contactos = [];
                 this.sedeId = '';
-                this.responsable = { nombre: '', correo: '', telefono: '', celular: '' };
+                this.direccionEnvio = '';
+                this.responsable = { titulo: '', nombre: '', correo: '', telefono: '' };
                 if (!id) return;
                 const res = await fetch(`${urlSedes}/${id}/sedes`);
                 this.sedes = await res.json();
@@ -274,8 +378,24 @@
             async onSedeChange(id) {
                 this.sedeId = id;
                 this.contactos = [];
-                this.responsable = { nombre: '', correo: '', telefono: '', celular: '' };
-                if (!id) return;
+                this.responsable = { titulo: '', nombre: '', correo: '', telefono: '' };
+                if (!id) { this.direccionEnvio = ''; return; }
+
+                const sede = this.sedes.find(s => s.id == id);
+                if (sede) {
+                    this.direccionEnvio = [
+                        sede.calle_y_numero,
+                        sede.colonia_barrio,
+                        sede.alcaldia_municipio,
+                        sede.ciudad,
+                        sede.estado_republica,
+                        sede.codigo_postal,
+                    ].filter(Boolean).join(', ');
+
+                    this.envioZona = this.calcularZona(sede.estado_republica);
+                    this.actualizarFechaMinima();
+                }
+
                 const res = await fetch(`${urlContactos}/${id}/contactos`);
                 this.contactos = await res.json();
             },
@@ -283,14 +403,14 @@
             onContactoChange(id) {
                 const contacto = this.contactos.find(c => c.id == id);
                 if (!contacto) {
-                    this.responsable = { nombre: '', correo: '', telefono: '', celular: '' };
+                    this.responsable = { titulo: '', nombre: '', correo: '', telefono: '' };
                     return;
                 }
                 this.responsable = {
+                    titulo:   '',
                     nombre:   contacto.nombre + ' ' + contacto.apellidos,
                     correo:   contacto.correo   ?? '',
                     telefono: contacto.telefono ?? '',
-                    celular:  '',
                 };
             },
         }
