@@ -17,6 +17,7 @@ class SolicitudExamen extends Model
         'CANTIDAD',
         'ESTADO',
         'FECHA',
+        'FORMATO',
     ];
 
     protected $casts = [

@@ -300,13 +300,61 @@ class AdminSolicitudController extends Controller
         $tipoExamenes = TipoExamen::where('estado', 'activo')->orderBy('nombre')->get();
 
         $examenesData = $solicitud->examenes->map(function ($examen) {
+            $porFolio = $examen->articulos->groupBy('FOLIO')->map(function ($items) use ($examen) {
+                $suma = $items->sum('CANTIDAD_ENVIADA');
+                return [
+                    'suma'       => $suma,
+                    'diferencia' => $suma - $examen->CANTIDAD,
+                ];
+            });
+
             return [
-                'examen'  => $examen,
-                'bloques' => $this->agruparArticulosPorBloques($examen->articulos),
+                'examen'   => $examen,
+                'bloques'  => $this->agruparArticulosPorBloques($examen->articulos),
+                'porFolio' => $porFolio,
+                'listo'    => $this->examenListoParaEnvio($examen),
             ];
         });
 
-        return view('admin.solicitudes.show-envio', compact('solicitud', 'tipoExamenes', 'examenesData'));
+        $puedeMarcarEnviada = $this->solicitudListaParaEnvio($solicitud);
+
+        return view('admin.solicitudes.show-envio', compact('solicitud', 'tipoExamenes', 'examenesData', 'puedeMarcarEnviada'));
+    }
+
+    // ── ¿El examen tiene al menos un ID Item y cada uno cubre la cantidad de candidatos? ──
+    private function examenListoParaEnvio(SolicitudExamen $examen): bool
+    {
+        $porFolio = $examen->articulos->groupBy('FOLIO');
+
+        if ($porFolio->isEmpty()) {
+            return false;
+        }
+
+        foreach ($porFolio as $items) {
+            if ($items->sum('CANTIDAD_ENVIADA') < $examen->CANTIDAD) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    // ── ¿Todos los exámenes de la solicitud están listos para marcar como enviada? ──
+    private function solicitudListaParaEnvio(Solicitud $solicitud): bool
+    {
+        $solicitud->loadMissing('examenes.articulos');
+
+        if ($solicitud->examenes->isEmpty()) {
+            return false;
+        }
+
+        foreach ($solicitud->examenes as $examen) {
+            if (!$this->examenListoParaEnvio($examen)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     public function exportarEnvios(Request $request)
@@ -642,8 +690,13 @@ class AdminSolicitudController extends Controller
             'estado' => 'required|in:enviada,retornada',
         ]);
 
-        if ($request->estado === 'enviada' && !$solicitud->isPendiente()) {
-            return back()->with('error', 'Solo se puede enviar una solicitud pendiente.');
+        if ($request->estado === 'enviada') {
+            if (!$solicitud->isPendiente()) {
+                return back()->with('error', 'Solo se puede enviar una solicitud pendiente.');
+            }
+            if (!$this->solicitudListaParaEnvio($solicitud)) {
+                return back()->with('error', 'No se puede marcar como enviada: faltan artículos por asignar en uno o más exámenes.');
+            }
         }
 
         if ($request->estado === 'retornada' && !$solicitud->isEnviada()) {
@@ -671,6 +724,7 @@ class AdminSolicitudController extends Controller
             'tipo_examen_id' => 'required|exists:tipo_examenes,id',
             'cantidad'       => 'required|integer|min:1',
             'fecha'          => 'required|date',
+            'formato'        => 'required|string|max:255',
         ]);
 
         $tipo = TipoExamen::findOrFail($request->tipo_examen_id);
@@ -694,6 +748,7 @@ class AdminSolicitudController extends Controller
             'CANTIDAD'     => $request->cantidad,
             'ESTADO'       => 'pendiente',
             'FECHA'        => $request->fecha,
+            'FORMATO'      => $request->formato,
         ]);
 
         $solicitud->increment('CANTIDAD_EXAMENES', $request->cantidad);
@@ -731,6 +786,40 @@ class AdminSolicitudController extends Controller
 
         return redirect()->route('admin.solicitudes.envio.show', $solicitud->ID_SOLICITUD)
             ->with('success', 'Examen eliminado correctamente.');
+    }
+
+    // ── EDITAR EXAMEN (incluye FORMATO obligatorio) ──
+    public function updateExamen(Request $request, Solicitud $solicitud, SolicitudExamen $examen)
+    {
+        if ($examen->ID_SOLICITUD != $solicitud->ID_SOLICITUD) {
+            abort(404);
+        }
+
+        if (!$solicitud->isPendiente()) {
+            return response()->json(['error' => 'La solicitud no es editable.'], 403);
+        }
+
+        $request->validate([
+            'examen'   => 'required|string|max:255',
+            'cantidad' => 'required|integer|min:1',
+            'fecha'    => 'required|date',
+            'formato'  => 'required|string|max:255',
+        ]);
+
+        $diferenciaCantidad = $request->cantidad - $examen->CANTIDAD;
+
+        $examen->update([
+            'EXAMEN'   => $request->examen,
+            'CANTIDAD' => $request->cantidad,
+            'FECHA'    => $request->fecha,
+            'FORMATO'  => $request->formato,
+        ]);
+
+        if ($diferenciaCantidad !== 0) {
+            $solicitud->increment('CANTIDAD_EXAMENES', $diferenciaCantidad);
+        }
+
+        return response()->json(['success' => true, 'examen' => $examen->fresh('articulos')]);
     }
 
     // ── BUSCAR ARTÍCULO PARA SOLICITUD ──
@@ -808,7 +897,33 @@ class AdminSolicitudController extends Controller
             return response()->json(['success' => false, 'message' => 'No se pudo agregar ningún artículo.', 'no_agregados' => $noAgregados], 422);
         }
 
-        return response()->json(['success' => true, 'agregados' => $agregados, 'no_agregados' => $noAgregados]);
+        $advertencias = $this->advertenciasCantidad($examen->fresh('articulos'));
+
+        return response()->json([
+            'success'      => true,
+            'agregados'    => $agregados,
+            'no_agregados' => $noAgregados,
+            'advertencias' => $advertencias,
+        ]);
+    }
+
+    // ── Compara cantidad de artículos por ID Item vs. candidatos del examen (solo informativo) ──
+    private function advertenciasCantidad(SolicitudExamen $examen): array
+    {
+        $avisos = [];
+
+        foreach ($examen->articulos->groupBy('FOLIO') as $folio => $items) {
+            $suma       = $items->sum('CANTIDAD_ENVIADA');
+            $diferencia = $suma - $examen->CANTIDAD;
+
+            if ($diferencia < 0) {
+                $avisos[] = "{$folio}: faltan " . abs($diferencia) . " artículo(s) — tiene {$suma} de {$examen->CANTIDAD} candidatos.";
+            } elseif ($diferencia > 0) {
+                $avisos[] = "{$folio}: sobran {$diferencia} artículo(s) — tiene {$suma} de {$examen->CANTIDAD} candidatos.";
+            }
+        }
+
+        return $avisos;
     }
 
     // ── REVISAR ARTÍCULOS (dry-run: no persiste nada) ──
@@ -899,8 +1014,8 @@ class AdminSolicitudController extends Controller
             $noAgregados[] = "{$serie}: no existe en inventario.";
             return;
         }
-        if ($solicitud->ENVIO_VERSION && $articulo->FORMATO && $articulo->FORMATO !== $solicitud->ENVIO_VERSION) {
-            $noAgregados[] = "{$serie}: el formato del artículo ({$articulo->FORMATO}) no coincide con la versión de la solicitud ({$solicitud->ENVIO_VERSION}).";
+        if ($examen->FORMATO && $articulo->FORMATO && $articulo->FORMATO !== $examen->FORMATO) {
+            $noAgregados[] = "{$serie}: el formato del artículo ({$articulo->FORMATO}) no coincide con el formato del examen ({$examen->FORMATO}).";
             return;
         }
         if ($articulo->CANTIDAD_ALMACEN < 1) {
@@ -968,8 +1083,8 @@ class AdminSolicitudController extends Controller
         // A granel
         $articulo = $articulos->first();
 
-        if ($solicitud->ENVIO_VERSION && $articulo->FORMATO && $articulo->FORMATO !== $solicitud->ENVIO_VERSION) {
-            $noAgregados[] = "{$idItem}: el formato del artículo ({$articulo->FORMATO}) no coincide con la versión de la solicitud ({$solicitud->ENVIO_VERSION}).";
+        if ($examen->FORMATO && $articulo->FORMATO && $articulo->FORMATO !== $examen->FORMATO) {
+            $noAgregados[] = "{$idItem}: el formato del artículo ({$articulo->FORMATO}) no coincide con el formato del examen ({$examen->FORMATO}).";
             return;
         }
 

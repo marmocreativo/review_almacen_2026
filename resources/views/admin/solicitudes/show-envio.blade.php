@@ -16,21 +16,6 @@
                 @endphp
                 <span class="badge {{ $badge }}">{{ ucfirst($solicitud->ESTADO_SOLICITUD) }}</span>
             </div>
-            <a href="{{ route('admin.solicitudes.carta', $solicitud) }}" class="btn btn-outline btn-sm gap-1">
-                <x-heroicon-o-document-arrow-down class="w-4 h-4" />
-                Carta de envío (Word)
-            </a>
-            @if($solicitud->isPendiente())
-                <form method="POST" action="{{ route('admin.solicitudes.estado', $solicitud) }}">
-                    @csrf @method('PATCH')
-                    <input type="hidden" name="estado" value="enviada">
-                    <button type="submit" class="btn btn-primary btn-sm gap-1"
-                        onclick="return confirm('¿Marcar esta solicitud como enviada?')">
-                        <x-heroicon-o-paper-airplane class="w-4 h-4" />
-                        Marcar como enviada
-                    </button>
-                </form>
-            @endif
         </div>
     </x-slot>
 
@@ -79,7 +64,7 @@
             <div x-data="{ editando: false, cantidadUsb: {{ (int) $solicitud->CANTIDAD_USB }} }" class="card bg-base-100 shadow h-fit">
                 <div class="card-body">
                     <div class="flex items-center justify-between mb-4">
-                        <h3 class="card-title text-base">Datos de envío</h3>
+                        <h3 class="card-title text-base">Datos para carta de envío</h3>
                         <button type="button" class="btn btn-outline btn-info btn-xs" x-show="!editando" @click="editando = true">
                             <x-heroicon-o-pencil class="w-3.5 h-3.5" />
                             Editar
@@ -266,29 +251,42 @@
         {{-- ═══════════ COLUMNA 2/3: EXÁMENES Y ARTÍCULOS (bloques) ═══════════ --}}
         <div class="card bg-base-100 shadow lg:col-span-2" x-data="examenesManager()">
             <div class="card-body">
-                <div class="flex items-center justify-between mb-4">
-                    <h3 class="card-title text-base">Exámenes y artículos</h3>
-                    @if($solicitud->isPendiente())
-                        <button type="button" class="btn btn-primary btn-sm gap-1" @click="modalExamen = true">
-                            <x-heroicon-o-plus class="w-4 h-4" />
-                            Agregar examen
-                        </button>
-                    @endif
-                </div>
+                <h3 class="card-title text-base mb-4">Exámenes y artículos</h3>
 
                 @forelse($examenesData as $data)
-                    @php [$examen, $bloques] = [$data['examen'], $data['bloques']]; @endphp
+                    @php
+                        [$examen, $bloques] = [$data['examen'], $data['bloques']];
+                        $porFolio = $data['porFolio'];
+                        $listo    = $data['listo'];
+                    @endphp
                     <div class="collapse collapse-arrow bg-base-200 mb-2 rounded-lg">
-                        <input type="checkbox" />
+                        <input type="checkbox" checked />
                         <div class="collapse-title font-medium py-3 min-h-0">
-                            <div class="flex items-center justify-between pr-4">
-                                <span>{{ $examen->EXAMEN }} — {{ $examen->CANTIDAD }} candidatos — {{ $examen->FECHA?->format('d/m/Y') }}</span>
-                                <span class="badge badge-sm">{{ $examen->articulos->count() }} artículos</span>
+                            <div class="flex items-center justify-between pr-4 flex-wrap gap-1">
+                                <span>
+                                    {{ $examen->EXAMEN }} — {{ $examen->CANTIDAD }} candidatos — {{ $examen->FECHA?->format('d/m/Y') }}
+                                    <span class="badge badge-sm badge-outline ml-1">
+                                        Formato: {{ $examen->FORMATO ?: 'sin definir' }}
+                                    </span>
+                                </span>
+                                <div class="flex items-center gap-1">
+                                    <span class="badge badge-sm">{{ $examen->articulos->count() }} artículos</span>
+                                    @if($listo)
+                                        <span class="badge badge-sm badge-success">Listo</span>
+                                    @else
+                                        <span class="badge badge-sm badge-warning">Incompleto</span>
+                                    @endif
+                                </div>
                             </div>
                         </div>
                         <div class="collapse-content text-sm">
                             @if($solicitud->isPendiente())
-                                <div class="flex gap-2 mb-3">
+                                <div class="flex gap-2 mb-3 flex-wrap">
+                                    <button type="button" class="btn btn-outline btn-info btn-xs"
+                                        @click="abrirEditarExamen({{ $examen->ID }}, @js($examen->EXAMEN), {{ $examen->CANTIDAD }}, @js(optional($examen->FECHA)->format('Y-m-d')), @js($examen->FORMATO))">
+                                        <x-heroicon-o-pencil class="w-3.5 h-3.5" />
+                                        Editar examen
+                                    </button>
                                     <button type="button" class="btn btn-outline btn-primary btn-xs"
                                         @click="abrirModalArticulos({{ $examen->ID }})">
                                         <x-heroicon-o-plus class="w-3.5 h-3.5" />
@@ -320,7 +318,10 @@
                                         </thead>
                                         <tbody>
                                             @foreach($bloques as $bIndex => $bloque)
-                                                @php $bloqueKey = $examen->ID . '-' . $bIndex; @endphp
+                                                @php
+                                                    $bloqueKey  = $examen->ID . '-' . $bIndex;
+                                                    $diferencia = $porFolio[$bloque['folio']]['diferencia'] ?? 0;
+                                                @endphp
                                                 <tr>
                                                     <td>
                                                         @if($bloque['count'] > 1)
@@ -334,7 +335,16 @@
                                                     <td class="font-mono">{{ $bloque['folio'] }}</td>
                                                     <td class="font-mono text-xs">{{ $bloque['rango'] }} @if($bloque['count'] > 1)<span class="text-base-content/40">({{ $bloque['count'] }})</span>@endif</td>
                                                     <td>{{ $bloque['nombre'] }}</td>
-                                                    <td class="text-center">{{ $bloque['cantidad_enviada'] }}</td>
+                                                    <td class="text-center">
+                                                        {{ $bloque['cantidad_enviada'] }}
+                                                        @if($diferencia < 0)
+                                                            <span class="badge badge-xs badge-error ml-1" title="Faltan artículos para este ID Item">-{{ abs($diferencia) }}</span>
+                                                        @elseif($diferencia > 0)
+                                                            <span class="badge badge-xs badge-warning ml-1" title="Sobran artículos para este ID Item">+{{ $diferencia }}</span>
+                                                        @else
+                                                            <span class="badge badge-xs badge-success ml-1" title="Completo">✓</span>
+                                                        @endif
+                                                    </td>
                                                     <td>
                                                         @if($solicitud->isPendiente())
                                                             <button type="button" class="btn btn-ghost btn-xs text-error"
@@ -384,6 +394,13 @@
                     <p class="text-sm text-base-content/50 text-center py-4">No hay exámenes agregados.</p>
                 @endforelse
 
+                @if($solicitud->isPendiente())
+                    <button type="button" class="btn btn-ghost btn-sm gap-1 mt-2" @click="modalExamen = true">
+                        <x-heroicon-o-plus class="w-4 h-4" />
+                        Agregar examen
+                    </button>
+                @endif
+
                 {{-- MODAL: AGREGAR EXAMEN --}}
                 <div x-show="modalExamen" x-cloak class="modal" :class="{ 'modal-open': modalExamen }">
                     <div class="modal-box max-w-md">
@@ -401,9 +418,13 @@
                             <label class="label"><span class="label-text">Cantidad de candidatos</span></label>
                             <input type="number" min="1" x-model="nuevoExamen.cantidad" class="input input-bordered" />
                         </div>
-                        <div class="form-control mb-4">
+                        <div class="form-control mb-3">
                             <label class="label"><span class="label-text">Fecha</span></label>
                             <input type="date" x-model="nuevoExamen.fecha" class="input input-bordered" />
+                        </div>
+                        <div class="form-control mb-4">
+                            <label class="label"><span class="label-text">Formato <span class="text-error">*</span></span></label>
+                            <input type="text" x-model="nuevoExamen.formato" placeholder="Ej. A, B, Digital..." class="input input-bordered" />
                         </div>
                         <p class="text-error text-sm mb-2" x-show="errorExamen" x-text="errorExamen"></p>
                         <div class="modal-action">
@@ -411,6 +432,37 @@
                             <button type="button" class="btn btn-primary btn-sm" @click="guardarExamen()" :disabled="guardandoExamen">
                                 <span x-show="!guardandoExamen">Guardar</span>
                                 <span x-show="guardandoExamen">Guardando...</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {{-- MODAL: EDITAR EXAMEN --}}
+                <div x-show="modalEditarExamen" x-cloak class="modal" :class="{ 'modal-open': modalEditarExamen }">
+                    <div class="modal-box max-w-md">
+                        <h3 class="font-bold text-lg mb-4">Editar examen</h3>
+                        <div class="form-control mb-3">
+                            <label class="label"><span class="label-text">Nombre del examen</span></label>
+                            <input type="text" x-model="examenEditando.examen" class="input input-bordered" />
+                        </div>
+                        <div class="form-control mb-3">
+                            <label class="label"><span class="label-text">Cantidad de candidatos</span></label>
+                            <input type="number" min="1" x-model="examenEditando.cantidad" class="input input-bordered" />
+                        </div>
+                        <div class="form-control mb-3">
+                            <label class="label"><span class="label-text">Fecha</span></label>
+                            <input type="date" x-model="examenEditando.fecha" class="input input-bordered" />
+                        </div>
+                        <div class="form-control mb-4">
+                            <label class="label"><span class="label-text">Formato <span class="text-error">*</span></span></label>
+                            <input type="text" x-model="examenEditando.formato" placeholder="Ej. A, B, Digital..." class="input input-bordered" />
+                        </div>
+                        <p class="text-error text-sm mb-2" x-show="errorEditarExamen" x-text="errorEditarExamen"></p>
+                        <div class="modal-action">
+                            <button type="button" class="btn btn-ghost btn-sm" @click="modalEditarExamen = false">Cancelar</button>
+                            <button type="button" class="btn btn-primary btn-sm" @click="guardarEdicionExamen()" :disabled="guardandoEditarExamen">
+                                <span x-show="!guardandoEditarExamen">Guardar</span>
+                                <span x-show="guardandoEditarExamen">Guardando...</span>
                             </button>
                         </div>
                     </div>
@@ -426,6 +478,7 @@
                             <div>
                                 <p class="text-sm text-base-content/60 mb-4">
                                     Ingresa uno o varios folios/ID Items (uno por línea). Acepta folio individual, rango (S000000001-S000000010) o ID Item con cantidad (ID:5).
+                                    Los artículos deben coincidir con el formato del examen.
                                 </p>
                                 <div class="form-control mb-4">
                                     <textarea x-model="entradasTexto" rows="6" placeholder="S000000001&#10;S000000010-S000000020&#10;PZ-AUDIO:10"
@@ -484,6 +537,31 @@
                                 </div>
                             </div>
                         </template>
+
+                        {{-- FASE 3: ADVERTENCIAS DE CANTIDAD (informativo, no bloquea) --}}
+                        <template x-if="faseArticulo === 'advertencias'">
+                            <div>
+                                <div class="alert alert-success text-sm mb-3">
+                                    <x-heroicon-o-check-circle class="w-5 h-5" />
+                                    <span>Artículos agregados correctamente.</span>
+                                </div>
+
+                                <div x-show="advertenciasCantidad.length" class="alert alert-warning text-xs mb-2 items-start">
+                                    <div>
+                                        <p class="font-semibold mb-1">Aviso de cantidades:</p>
+                                        <div class="max-h-32 overflow-y-auto space-y-0.5">
+                                            <template x-for="msg in advertenciasCantidad" :key="msg">
+                                                <p x-text="msg"></p>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="modal-action">
+                                    <button type="button" class="btn btn-primary btn-sm" @click="window.location.reload()">Cerrar</button>
+                                </div>
+                            </div>
+                        </template>
                     </div>
                 </div>
 
@@ -492,22 +570,53 @@
 
     </div>
 
+    {{-- ═══════════ ACCIONES FINALES ═══════════ --}}
+    <div class="card bg-base-100 shadow mt-4">
+        <div class="card-body flex-row items-center justify-end gap-2 flex-wrap">
+            <a href="{{ route('admin.solicitudes.carta', $solicitud) }}" class="btn btn-outline btn-sm gap-1">
+                <x-heroicon-o-document-arrow-down class="w-4 h-4" />
+                Carta de envío (Word)
+            </a>
+
+            @if($solicitud->isPendiente())
+                <div class="tooltip" data-tip="@if(!$puedeMarcarEnviada) Cada examen debe tener al menos un ID Item, y la cantidad de artículos por ID Item debe cubrir el número de candidatos. @endif">
+                    <form method="POST" action="{{ route('admin.solicitudes.estado', $solicitud) }}">
+                        @csrf @method('PATCH')
+                        <input type="hidden" name="estado" value="enviada">
+                        <button type="submit" class="btn btn-primary btn-sm gap-1"
+                            @disabled(!$puedeMarcarEnviada)
+                            onclick="return confirm('¿Marcar esta solicitud como enviada?')">
+                            <x-heroicon-o-paper-airplane class="w-4 h-4" />
+                            Marcar como enviada
+                        </button>
+                    </form>
+                </div>
+            @endif
+        </div>
+    </div>
+
     <script>
         function examenesManager() {
             return {
                 modalExamen: false,
+                modalEditarExamen: false,
                 modalArticulo: false,
                 guardandoExamen: false,
+                guardandoEditarExamen: false,
                 revisandoArticulo: false,
                 guardandoArticulo: false,
                 errorExamen: '',
+                errorEditarExamen: '',
                 errorArticulo: '',
                 examenActual: null,
-                nuevoExamen: { tipo_examen_id: '', cantidad: '', fecha: '' },
+                nuevoExamen: { tipo_examen_id: '', cantidad: '', fecha: '', formato: '' },
+                examenEditando: { id: null, examen: '', cantidad: '', fecha: '', formato: '' },
                 entradasTexto: '',
                 faseArticulo: 'captura',
                 revision: { agregados: [], no_agregados: [] },
+                advertenciasCantidad: [],
                 resultado: {},
+                bloqueAbierto: null,
 
                 abrirModalArticulos(examenId) {
                     this.examenActual = examenId;
@@ -517,7 +626,12 @@
                     this.errorArticulo = '';
                     this.modalArticulo = true;
                 },
-                bloqueAbierto: null,
+
+                abrirEditarExamen(id, examen, cantidad, fecha, formato) {
+                    this.errorEditarExamen = '';
+                    this.examenEditando = { id, examen, cantidad, fecha, formato: formato || '' };
+                    this.modalEditarExamen = true;
+                },
 
                 toggleBloque(key) {
                     this.bloqueAbierto = this.bloqueAbierto === key ? null : key;
@@ -544,6 +658,37 @@
                         window.location.reload();
                     } finally {
                         this.guardandoExamen = false;
+                    }
+                },
+
+                async guardarEdicionExamen() {
+                    this.errorEditarExamen = '';
+                    this.guardandoEditarExamen = true;
+                    try {
+                        const res = await fetch(`/admin/solicitudes/{{ $solicitud->ID_SOLICITUD }}/examenes/${this.examenEditando.id}`, {
+                            method: 'PATCH',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                                'Accept': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                examen: this.examenEditando.examen,
+                                cantidad: this.examenEditando.cantidad,
+                                fecha: this.examenEditando.fecha,
+                                formato: this.examenEditando.formato,
+                            }),
+                        });
+                        const data = await res.json();
+                        if (!res.ok || data.error) {
+                            this.errorEditarExamen = data.error || (data.errors ? Object.values(data.errors).flat().join(' ') : 'Error al guardar.');
+                            return;
+                        }
+                        window.location.reload();
+                    } catch (e) {
+                        this.errorEditarExamen = 'Error al guardar los cambios.';
+                    } finally {
+                        this.guardandoEditarExamen = false;
                     }
                 },
 
@@ -598,9 +743,13 @@
                         const data = await res.json();
                         this.resultado = data;
                         if (data.success) {
-                            // Dejamos el botón en "trabajando" hasta que la página recargue,
-                            // para no reactivarlo durante la pausa del setTimeout.
-                            setTimeout(() => window.location.reload(), 1200);
+                            this.advertenciasCantidad = data.advertencias || [];
+                            if (this.advertenciasCantidad.length) {
+                                this.faseArticulo = 'advertencias';
+                                this.guardandoArticulo = false;
+                            } else {
+                                setTimeout(() => window.location.reload(), 800);
+                            }
                             return;
                         }
                         this.errorArticulo = data.message || 'No se pudo agregar ningún artículo.';

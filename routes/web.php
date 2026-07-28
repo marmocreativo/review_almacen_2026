@@ -124,6 +124,7 @@ Route::middleware('auth')->group(function () {
         Route::get('solicitudes/{solicitud}/envio', [AdminSolicitudController::class, 'showEnvio'])->name('solicitudes.envio.show');
         Route::patch('solicitudes/{solicitud}/envio', [AdminSolicitudController::class, 'updateEnvio'])->name('solicitudes.envio.update');
         Route::post('solicitudes/{solicitud}/examenes', [AdminSolicitudController::class, 'agregarExamen'])->name('solicitudes.examenes.store');
+        Route::patch('solicitudes/{solicitud}/examenes/{examen}', [AdminSolicitudController::class, 'updateExamen'])->name('solicitudes.examenes.update');
         Route::delete('solicitudes/{solicitud}/examenes/{examen}', [AdminSolicitudController::class, 'eliminarExamen'])->name('solicitudes.examenes.destroy');
         Route::post('solicitudes/{solicitud}/examenes/{examen}/articulos', [AdminSolicitudController::class, 'agregarArticulo'])->name('solicitudes.articulos.store');
         Route::post('solicitudes/{solicitud}/examenes/{examen}/articulos/revisar', [AdminSolicitudController::class, 'revisarArticulos'])->name('solicitudes.articulos.revisar');
