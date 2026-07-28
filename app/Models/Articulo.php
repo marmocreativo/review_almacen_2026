@@ -24,6 +24,7 @@ class Articulo extends Model
         'CANTIDAD_PERDIDOS',
         'UBICACION_UNICA',
         'TIPO',
+        'ID_TIPO_EXAMEN',
     ];
 
     protected $casts = [

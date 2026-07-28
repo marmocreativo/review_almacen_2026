@@ -66,6 +66,7 @@ Route::middleware('auth')->group(function () {
         Route::get('articulos/exportar', [AdminArticuloController::class, 'exportar'])->name('articulos.exportar');
         Route::post('articulos/buscar', [AdminArticuloController::class, 'buscar'])->name('articulos.buscar');
         Route::post('articulos/rango', [AdminArticuloController::class, 'storeRango'])->name('articulos.rango');
+        Route::post('articulos/lote', [AdminArticuloController::class, 'storeLote'])->name('articulos.lote');
         Route::post('articulos/destroy-lote', [AdminArticuloController::class, 'destroyLote'])->name('articulos.destroy-lote');
         Route::post('articulos', [AdminArticuloController::class, 'store'])->name('articulos.store');
         Route::get('articulos/grupo/editar', [AdminArticuloController::class, 'editGrupo'])->name('articulos.grupo.edit');
@@ -113,6 +114,7 @@ Route::middleware('auth')->group(function () {
         Route::post('solicitudes', [AdminSolicitudController::class, 'store'])->name('solicitudes.store');
         Route::delete('solicitudes/{solicitud}', [AdminSolicitudController::class, 'destroy'])->name('solicitudes.destroy');
         Route::patch('solicitudes/{solicitud}/estado', [AdminSolicitudController::class, 'cambiarEstado'])->name('solicitudes.estado');
+        Route::patch('solicitudes/{solicitud}/aprobar', [AdminSolicitudController::class, 'aprobar'])->name('solicitudes.aprobar');
 
         // ── Pestaña: Datos generales ──
         Route::get('solicitudes/{solicitud}', [AdminSolicitudController::class, 'showDatos'])->name('solicitudes.show');

@@ -434,6 +434,114 @@ class AdminArticuloController extends Controller
         ]);
     }
 
+    // Paso 2c: alta por lote — una línea por folio individual o rango, cada una con su propio resultado
+    public function storeLote(Request $request)
+    {
+        $request->validate([
+            'FOLIO'          => 'nullable|string|max:255',
+            'NOMBRE'         => 'required|string|max:255',
+            'TIPO'           => 'required|in:fisico,digital',
+            'DESCRIPCION'    => 'nullable|string',
+            'FORMATO'        => 'nullable|string|max:255',
+            'COSTO_UNITARIO' => 'nullable|numeric|min:0',
+            'PRECIO_VENTA'   => 'nullable|numeric|min:0',
+            'ID_TIPO_EXAMEN' => 'nullable|exists:tipo_examenes,id',
+            'LINEAS'         => 'required|string',
+        ]);
+
+        $lineas = collect(preg_split('/\r\n|\r|\n/', $request->LINEAS))
+            ->map(fn($l) => strtoupper(trim($l)))
+            ->filter()
+            ->values();
+
+        if ($lineas->isEmpty()) {
+            return response()->json(['success' => false, 'message' => 'Ingresa al menos una línea con un folio o rango.'], 422);
+        }
+
+        $idItem     = $request->filled('FOLIO') ? strtoupper($request->FOLIO) : $this->generarFolioAleatorio();
+        $agregados  = [];
+        $existentes = [];
+        $invalidas  = [];
+
+        foreach ($lineas as $linea) {
+            // Rango: S000000001-S000000010
+            if (preg_match('/^S(\d{9})-S(\d{9})$/', $linea, $m)) {
+                $numInicial = (int) $m[1];
+                $numFinal   = (int) $m[2];
+
+                if ($numFinal < $numInicial) {
+                    $invalidas[] = "{$linea}: el folio final debe ser mayor o igual al inicial.";
+                    continue;
+                }
+                if (($numFinal - $numInicial) > 5000) {
+                    $invalidas[] = "{$linea}: rango demasiado grande (máx. 5000 folios).";
+                    continue;
+                }
+
+                for ($n = $numInicial; $n <= $numFinal; $n++) {
+                    $this->crearArticuloLote($n, $idItem, $request, $agregados, $existentes);
+                }
+                continue;
+            }
+
+            // Folio individual: S000000001 o S000000001-8 (dígito verificador opcional)
+            if (preg_match('/^S(\d{9})(?:-\d+)?$/', $linea, $m)) {
+                $this->crearArticuloLote((int) $m[1], $idItem, $request, $agregados, $existentes);
+                continue;
+            }
+
+            $invalidas[] = "{$linea}: no tiene el formato esperado (S + 9 dígitos, o un rango S...-S...).";
+        }
+
+        if (empty($agregados)) {
+            return response()->json([
+                'success'    => false,
+                'message'    => 'No se agregó ningún folio.',
+                'existentes' => $existentes,
+                'invalidas'  => $invalidas,
+            ], 422);
+        }
+
+        return response()->json([
+            'success'    => true,
+            'id_item'    => $idItem,
+            'agregados'  => $agregados,
+            'existentes' => $existentes,
+            'invalidas'  => $invalidas,
+        ]);
+    }
+
+    private function crearArticuloLote(int $numerico, string $idItem, Request $request, array &$agregados, array &$existentes): void
+    {
+        $numeroPad = str_pad((string) $numerico, 9, '0', STR_PAD_LEFT);
+        $serie     = 'S' . $numeroPad;
+
+        if (Articulo::where('SERIE', $serie)->exists()) {
+            $existentes[] = $serie;
+            return;
+        }
+
+        Articulo::create([
+            'FOLIO'                => $idItem,
+            'SERIE'                => $serie,
+            'SERIE_NUMERICO'       => $numeroPad,
+            'NOMBRE'               => $request->NOMBRE,
+            'DESCRIPCION'          => $request->DESCRIPCION ?? '',
+            'FORMATO'              => strtoupper($request->FORMATO ?? ''),
+            'COSTO_UNITARIO'       => $request->COSTO_UNITARIO ?? 0,
+            'PRECIO_VENTA'         => $request->PRECIO_VENTA ?? 0,
+            'CANTIDAD_ALMACEN'     => 1,
+            'CANTIDAD_SOLICITUDES' => 0,
+            'CANTIDAD_DESTRUCCION' => 0,
+            'CANTIDAD_PERDIDOS'    => 0,
+            'UBICACION_UNICA'      => 'almacen',
+            'TIPO'                 => $request->TIPO,
+            'ID_TIPO_EXAMEN'       => $request->ID_TIPO_EXAMEN,
+        ]);
+
+        $agregados[] = $serie;
+    }
+
     // Edición inline
     public function updateInline(Request $request, Articulo $articulo)
     {

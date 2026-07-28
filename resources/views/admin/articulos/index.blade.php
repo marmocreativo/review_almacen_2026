@@ -18,6 +18,9 @@
                 <button onclick="document.getElementById('modal-rango').showModal()" class="btn btn-secondary btn-sm">
                     + Alta por rango
                 </button>
+                <button onclick="document.getElementById('modal-lote').showModal()" class="btn btn-accent btn-sm">
+                    + Alta por lote
+                </button>
             </div>
         </div>
     </x-slot>
@@ -105,7 +108,7 @@
                             <th>ID Item</th>
                             <th>{{ $vista === 'bloques' ? 'Rango' : 'Folio' }}</th>
                             <th>Nombre</th>
-                            <th>Tipo</th>
+                            <th>Formato</th>
                             <th>Tipo examen</th>
                             <th>Cantidad almacén</th>
                             <th>Estado</th>
@@ -130,11 +133,7 @@
                                     <td class="font-mono">{{ $fila['folio'] }}</td>
                                     <td class="font-mono text-xs">{{ $fila['rango'] }} <span class="text-base-content/40">({{ $fila['count'] }})</span></td>
                                     <td>{{ $fila['nombre'] }}</td>
-                                    <td>
-                                        <span class="badge badge-sm {{ $fila['tipo'] === 'fisico' ? 'badge-info' : 'badge-accent' }}">
-                                            {{ ucfirst($fila['tipo']) }}
-                                        </span>
-                                    </td>
+                                    <td class="font-mono text-xs">{{ $fila['formato'] ?: '—' }}</td>
                                     <td class="text-xs">{{ $fila['tipo_examen'] ?? '—' }}</td>
                                     <td>
                                         <div x-data="{ open: false }">
@@ -186,11 +185,7 @@
                                     <td class="font-mono">{{ $fila->FOLIO }}</td>
                                     <td class="font-mono text-xs">{{ $fila->SERIE ?: '—' }}</td>
                                     <td>{{ $fila->NOMBRE }}</td>
-                                    <td>
-                                        <span class="badge badge-sm {{ $fila->TIPO === 'fisico' ? 'badge-info' : 'badge-accent' }}">
-                                            {{ ucfirst($fila->TIPO) }}
-                                        </span>
-                                    </td>
+                                    <td class="font-mono text-xs">{{ $fila->FORMATO ?: '—' }}</td>
                                     <td class="text-xs">{{ $fila->tipoExamen?->nombre ?? '—' }}</td>
                                     <td>
                                         <div class="flex items-center gap-1">
@@ -290,15 +285,8 @@
                             </div>
                         </template>
 
-                        <div class="form-control">
-                            <label class="label"><span class="label-text">Costo unitario</span></label>
-                            <input type="number" step="0.01" min="0" x-model="form.COSTO_UNITARIO" class="input input-bordered" />
-                        </div>
-
-                        <div class="form-control">
-                            <label class="label"><span class="label-text">Precio venta</span></label>
-                            <input type="number" step="0.01" min="0" x-model="form.PRECIO_VENTA" class="input input-bordered" />
-                        </div>
+                        <input type="hidden" x-model="form.COSTO_UNITARIO" />
+                        <input type="hidden" x-model="form.PRECIO_VENTA" />
 
                         <div class="form-control sm:col-span-2">
                             <label class="label"><span class="label-text">Tipo de examen relacionado</span></label>
@@ -355,14 +343,8 @@
                         <option value="digital">Digital</option>
                     </select>
                 </div>
-                <div class="form-control">
-                    <label class="label py-1"><span class="label-text font-medium">Costo unitario</span></label>
-                    <input type="number" step="0.01" id="i-costo" value="0" class="input input-bordered input-sm w-full" />
-                </div>
-                <div class="form-control">
-                    <label class="label py-1"><span class="label-text font-medium">Precio venta</span></label>
-                    <input type="number" step="0.01" id="i-precio" value="0" class="input input-bordered input-sm w-full" />
-                </div>
+                <input type="hidden" id="i-costo" value="0" />
+                <input type="hidden" id="i-precio" value="0" />
                 <div class="form-control col-span-2" id="i-cantidad-wrap">
                     <label class="label py-1"><span class="label-text font-medium">Cantidad en almacén</span></label>
                     <input type="number" id="i-cantidad" value="1" min="1" class="input input-bordered input-sm w-full" />
@@ -422,14 +404,8 @@
                         <option value="digital">Digital</option>
                     </select>
                 </div>
-                <div class="form-control">
-                    <label class="label py-1"><span class="label-text font-medium">Costo unitario</span></label>
-                    <input type="number" step="0.01" id="r-costo" value="0" class="input input-bordered input-sm w-full" />
-                </div>
-                <div class="form-control">
-                    <label class="label py-1"><span class="label-text font-medium">Precio venta</span></label>
-                    <input type="number" step="0.01" id="r-precio" value="0" class="input input-bordered input-sm w-full" />
-                </div>
+                <input type="hidden" id="r-costo" value="0" />
+                <input type="hidden" id="r-precio" value="0" />
                 <div class="form-control col-span-2">
                     <label class="label py-1"><span class="label-text font-medium">Tipo de examen relacionado</span></label>
                     <select id="r-tipo-examen" class="select select-bordered select-sm w-full">
@@ -446,6 +422,64 @@
 
             <div class="modal-action mt-4">
                 <button onclick="guardarRango()" id="btn-guardar-rango" class="btn btn-primary">Guardar</button>
+                <form method="dialog"><button class="btn btn-ghost">Cancelar</button></form>
+            </div>
+        </div>
+        <form method="dialog" class="modal-backdrop"><button>Cerrar</button></form>
+    </dialog>
+
+    {{-- ===================== MODAL ALTA POR LOTE ===================== --}}
+    <dialog id="modal-lote" class="modal">
+        <div class="modal-box w-11/12 max-w-2xl">
+            <h3 class="font-bold text-lg mb-1">Alta por lote</h3>
+            <p class="text-sm text-base-content/60 mb-4">
+                Escribe un folio o rango por línea. Acepta folio individual (<code>S000000001</code>) o rango
+                (<code>S000000001-S000000010</code>). Todos los campos de abajo se aplican por igual a cada línea.
+            </p>
+
+            <div class="grid grid-cols-2 gap-3">
+                <div class="form-control col-span-2">
+                    <label class="label py-1"><span class="label-text font-medium">Folios / rangos, uno por línea *</span></label>
+                    <textarea id="l-lineas" rows="6" placeholder="S000000001&#10;S000000010-S000000020&#10;S000000050"
+                        class="textarea textarea-bordered font-mono text-sm w-full"></textarea>
+                </div>
+                <div class="form-control col-span-2">
+                    <label class="label py-1"><span class="label-text font-medium">ID Item</span></label>
+                    <input type="text" id="l-folio" class="input input-bordered input-sm font-mono w-full" placeholder="Auto si se deja vacío" />
+                    <p class="text-xs text-base-content/40 mt-1">Se comparte entre todas las líneas del lote.</p>
+                </div>
+                <div class="form-control col-span-2">
+                    <label class="label py-1"><span class="label-text font-medium">Nombre *</span></label>
+                    <input type="text" id="l-nombre" class="input input-bordered input-sm w-full" />
+                </div>
+                <div class="form-control">
+                    <label class="label py-1"><span class="label-text font-medium">Formato</span></label>
+                    <input type="text" id="l-formato" class="input input-bordered input-sm w-full" />
+                </div>
+                <div class="form-control">
+                    <label class="label py-1"><span class="label-text font-medium">Tipo *</span></label>
+                    <select id="l-tipo" class="select select-bordered select-sm w-full">
+                        <option value="fisico">Físico</option>
+                        <option value="digital">Digital</option>
+                    </select>
+                </div>
+                <input type="hidden" id="l-costo" value="0" />
+                <input type="hidden" id="l-precio" value="0" />
+                <div class="form-control col-span-2">
+                    <label class="label py-1"><span class="label-text font-medium">Tipo de examen relacionado</span></label>
+                    <select id="l-tipo-examen" class="select select-bordered select-sm w-full">
+                        <option value="">— Sin relación —</option>
+                        @foreach($tiposExamen as $te)
+                            <option value="{{ $te->id }}">{{ $te->nombre }}</option>
+                        @endforeach
+                    </select>
+                </div>
+            </div>
+
+            <div id="lote-error" class="alert alert-error text-sm mt-3 hidden"></div>
+
+            <div class="modal-action mt-4">
+                <button onclick="guardarLote()" id="btn-guardar-lote" class="btn btn-primary">Guardar</button>
                 <form method="dialog"><button class="btn btn-ghost">Cancelar</button></form>
             </div>
         </div>
@@ -742,7 +776,66 @@
             }
         }
 
-        function mostrarInforme({ resumen, agregados = null, existentes = null }) {
+        const urlLote = '{{ route('admin.articulos.lote') }}';
+
+        async function guardarLote() {
+            const error = document.getElementById('lote-error');
+            error.classList.add('hidden');
+
+            const lineasTexto = document.getElementById('l-lineas').value.trim();
+            if (!lineasTexto) {
+                error.textContent = 'Ingresa al menos una línea con un folio o rango.';
+                error.classList.remove('hidden');
+                return;
+            }
+
+            const payload = {
+                LINEAS:         lineasTexto,
+                FOLIO:          document.getElementById('l-folio').value.trim(),
+                NOMBRE:         document.getElementById('l-nombre').value.trim(),
+                FORMATO:        document.getElementById('l-formato').value.trim(),
+                TIPO:           document.getElementById('l-tipo').value,
+                COSTO_UNITARIO: document.getElementById('l-costo').value,
+                PRECIO_VENTA:   document.getElementById('l-precio').value,
+                ID_TIPO_EXAMEN: document.getElementById('l-tipo-examen').value || null,
+            };
+
+            const btn = document.getElementById('btn-guardar-lote');
+            const textoOriginal = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = `<span class="loading loading-spinner loading-xs"></span> Agregando a inventario...`;
+
+            try {
+                const res = await fetch(urlLote, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+                    body: JSON.stringify(payload),
+                });
+                const data = await res.json().catch(() => ({}));
+
+                if (!res.ok || !data.success) {
+                    error.textContent = data.message ?? 'Error al guardar.';
+                    if (data.invalidas && data.invalidas.length) {
+                        error.textContent += ' ' + data.invalidas.join(' | ');
+                    }
+                    error.classList.remove('hidden');
+                    return;
+                }
+
+                document.getElementById('modal-lote').close();
+                mostrarInforme({
+                    resumen: `ID Item: <strong>${data.id_item}</strong>`,
+                    agregados: data.agregados,
+                    existentes: data.existentes,
+                    invalidas: data.invalidas,
+                });
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = textoOriginal;
+            }
+        }
+
+        function mostrarInforme({ resumen, agregados = null, existentes = null, invalidas = null }) {
             const contenedor = document.getElementById('informe-contenido');
             let html = `<p>${resumen}</p>`;
 
@@ -751,6 +844,9 @@
             }
             if (existentes && existentes.length) {
                 html += `<div class="alert alert-warning"><span>${existentes.length} folio(s) no se agregaron porque ya existían: ${existentes.join(', ')}</span></div>`;
+            }
+            if (invalidas && invalidas.length) {
+                html += `<div class="alert alert-error"><span>${invalidas.length} línea(s) con formato inválido: ${invalidas.join(' | ')}</span></div>`;
             }
 
             contenedor.innerHTML = html;

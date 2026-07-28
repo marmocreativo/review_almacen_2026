@@ -140,6 +140,16 @@
                                 </td>
                                 <td>
                                     <div class="flex gap-1 justify-end">
+                                        @if($solicitud->APROBACION === 'pendiente')
+                                            <form method="POST" action="{{ route('admin.solicitudes.aprobar', $solicitud->ID_SOLICITUD) }}"
+                                                onsubmit="return confirm('¿Aprobar esta solicitud?')">
+                                                @csrf @method('PATCH')
+                                                <button type="submit" class="btn btn-outline btn-success btn-xs gap-1">
+                                                    <x-heroicon-o-check class="w-3.5 h-3.5" />
+                                                    Aprobar
+                                                </button>
+                                            </form>
+                                        @endif
                                         <a href="{{ route('admin.solicitudes.show', $solicitud->ID_SOLICITUD) }}"
                                             class="btn btn-outline btn-info btn-xs gap-1">
                                             <x-heroicon-o-eye class="w-3.5 h-3.5" />
@@ -203,6 +213,15 @@
                                 </p>
                             </div>
                             <div class="flex gap-1 shrink-0">
+                                @if($solicitud->APROBACION === 'pendiente')
+                                    <form method="POST" action="{{ route('admin.solicitudes.aprobar', $solicitud->ID_SOLICITUD) }}"
+                                        onsubmit="return confirm('¿Aprobar esta solicitud?')">
+                                        @csrf @method('PATCH')
+                                        <button type="submit" class="btn btn-ghost btn-xs btn-square text-success">
+                                            <x-heroicon-o-check class="w-4 h-4" />
+                                        </button>
+                                    </form>
+                                @endif
                                 <a href="{{ route('admin.solicitudes.show', $solicitud->ID_SOLICITUD) }}"
                                     class="btn btn-ghost btn-xs btn-square">
                                     <x-heroicon-o-eye class="w-4 h-4" />

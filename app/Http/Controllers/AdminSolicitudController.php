@@ -1562,4 +1562,24 @@ public function generarCartaWord(Solicitud $solicitud)
         $writer->save('php://output');
         exit;
     }
+
+    public function aprobar(Solicitud $solicitud)
+    {
+        if ($solicitud->APROBACION === 'aprobada') {
+            return back()->with('success', 'Esta solicitud ya estaba aprobada.');
+        }
+
+        $solicitud->update(['APROBACION' => 'aprobada']);
+
+        Bitacora::registrar('solicitudes', 'aprobar_solicitud',
+            "Aprobó la solicitud #{$solicitud->ID_SOLICITUD}" . ($solicitud->empresa ? " de {$solicitud->empresa->nombre}" : ''),
+            $solicitud->ID_SOLICITUD,
+            [
+                'id_solicitud' => $solicitud->ID_SOLICITUD,
+                'cliente'      => $solicitud->empresa?->nombre ?? 'Sin cliente',
+            ]
+        );
+
+        return back()->with('success', "Solicitud #{$solicitud->ID_SOLICITUD} aprobada correctamente.");
+    }
 }
