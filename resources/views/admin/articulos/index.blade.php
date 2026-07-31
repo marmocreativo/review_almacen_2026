@@ -28,7 +28,7 @@
     <x-alert />
 
     {{-- FILTROS --}}
-    <form method="GET" class="card bg-base-100 shadow mb-4">
+    <form method="GET" autocomplete="off" class="card bg-base-100 shadow mb-4">
         <div class="card-body py-3">
             <input type="hidden" name="vista" value="{{ $vista }}" />
             <div class="flex flex-wrap gap-2 items-end">
@@ -238,7 +238,7 @@
 
                 <div x-show="cargando" class="py-8 text-center text-base-content/50">Cargando...</div>
 
-                <form x-show="!cargando" @submit.prevent="guardar()">
+                <form x-show="!cargando" autocomplete="off" @submit.prevent="guardar()">
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
                         <template x-if="!esGrupo">
@@ -319,22 +319,23 @@
         <div class="modal-box w-11/12 max-w-lg">
             <h3 class="font-bold text-lg mb-4">Alta individual</h3>
 
+            <form autocomplete="off" onsubmit="return false;">
             <div class="grid grid-cols-2 gap-3">
                 <div class="form-control">
                     <label class="label py-1"><span class="label-text font-medium">ID Item</span></label>
-                    <input type="text" id="i-folio" class="input input-bordered input-sm font-mono w-full" placeholder="Auto si se deja vacío" />
+                    <input type="text" id="i-folio" name="i-folio-no-autofill" autocomplete="new-password" class="input input-bordered input-sm font-mono w-full" placeholder="Auto si se deja vacío" />
                 </div>
                 <div class="form-control">
                     <label class="label py-1"><span class="label-text font-medium">Folio</span></label>
-                    <input type="text" id="i-serie" class="input input-bordered input-sm font-mono w-full" placeholder="Ej: S451232154" />
+                    <input type="text" id="i-serie" name="i-serie-no-autofill" autocomplete="new-password" class="input input-bordered input-sm font-mono w-full" placeholder="Ej: S451232154" />
                 </div>
                 <div class="form-control col-span-2">
                     <label class="label py-1"><span class="label-text font-medium">Nombre *</span></label>
-                    <input type="text" id="i-nombre" class="input input-bordered input-sm w-full" />
+                    <input type="text" id="i-nombre" name="i-nombre-no-autofill" autocomplete="new-password" class="input input-bordered input-sm w-full" />
                 </div>
                 <div class="form-control">
                     <label class="label py-1"><span class="label-text font-medium">Formato</span></label>
-                    <input type="text" id="i-formato" class="input input-bordered input-sm w-full" />
+                    <input type="text" id="i-formato" name="i-formato-no-autofill" autocomplete="new-password" class="input input-bordered input-sm w-full" />
                 </div>
                 <div class="form-control">
                     <label class="label py-1"><span class="label-text font-medium">Tipo *</span></label>
@@ -347,7 +348,7 @@
                 <input type="hidden" id="i-precio" value="0" />
                 <div class="form-control col-span-2" id="i-cantidad-wrap">
                     <label class="label py-1"><span class="label-text font-medium">Cantidad en almacén</span></label>
-                    <input type="number" id="i-cantidad" value="1" min="1" class="input input-bordered input-sm w-full" />
+                    <input type="number" id="i-cantidad" name="i-cantidad-no-autofill" autocomplete="off" value="1" min="1" class="input input-bordered input-sm w-full" />
                     <p class="text-xs text-base-content/40 mt-1">Solo aplica si no capturas un folio (artículo a granel).</p>
                 </div>
                 <div class="form-control col-span-2">
@@ -360,11 +361,12 @@
                     </select>
                 </div>
             </div>
+            </form>
 
             <div id="individual-error" class="alert alert-error text-sm mt-3 hidden"></div>
 
             <div class="modal-action mt-4">
-                <button onclick="guardarIndividual()" id="btn-guardar-individual" class="btn btn-primary">Guardar</button>
+                <button type="button" onclick="guardarIndividual()" id="btn-guardar-individual" class="btn btn-primary">Guardar</button>
                 <form method="dialog"><button class="btn btn-ghost">Cancelar</button></form>
             </div>
         </div>
@@ -376,26 +378,27 @@
         <div class="modal-box w-11/12 max-w-lg">
             <h3 class="font-bold text-lg mb-4">Alta por rango</h3>
 
+            <form autocomplete="off" onsubmit="return false;">
             <div class="grid grid-cols-2 gap-3">
                 <div class="form-control">
                     <label class="label py-1"><span class="label-text font-medium">Folio inicial *</span></label>
-                    <input type="text" id="r-serie-inicial" class="input input-bordered input-sm font-mono w-full" placeholder="S451232154" />
+                    <input type="text" id="r-serie-inicial" name="r-serie-inicial-no-autofill" autocomplete="new-password" class="input input-bordered input-sm font-mono w-full" placeholder="S451232154" />
                 </div>
                 <div class="form-control">
                     <label class="label py-1"><span class="label-text font-medium">Folio final *</span></label>
-                    <input type="text" id="r-serie-final" class="input input-bordered input-sm font-mono w-full" placeholder="S451232200" />
+                    <input type="text" id="r-serie-final" name="r-serie-final-no-autofill" autocomplete="new-password" class="input input-bordered input-sm font-mono w-full" placeholder="S451232200" />
                 </div>
                 <div class="form-control col-span-2">
                     <label class="label py-1"><span class="label-text font-medium">ID Item</span></label>
-                    <input type="text" id="r-folio" class="input input-bordered input-sm font-mono w-full" placeholder="Auto si se deja vacío" />
+                    <input type="text" id="r-folio" name="r-folio-no-autofill" autocomplete="new-password" class="input input-bordered input-sm font-mono w-full" placeholder="Auto si se deja vacío" />
                 </div>
                 <div class="form-control col-span-2">
                     <label class="label py-1"><span class="label-text font-medium">Nombre *</span></label>
-                    <input type="text" id="r-nombre" class="input input-bordered input-sm w-full" />
+                    <input type="text" id="r-nombre" name="r-nombre-no-autofill" autocomplete="new-password" class="input input-bordered input-sm w-full" />
                 </div>
                 <div class="form-control">
                     <label class="label py-1"><span class="label-text font-medium">Formato</span></label>
-                    <input type="text" id="r-formato" class="input input-bordered input-sm w-full" />
+                    <input type="text" id="r-formato" name="r-formato-no-autofill" autocomplete="new-password" class="input input-bordered input-sm w-full" />
                 </div>
                 <div class="form-control">
                     <label class="label py-1"><span class="label-text font-medium">Tipo *</span></label>
@@ -416,12 +419,13 @@
                     </select>
                 </div>
             </div>
+            </form>
 
             <div id="preview-rango" class="mt-3 p-2 rounded bg-base-200 text-sm font-mono text-base-content/70 min-h-8"></div>
             <div id="rango-error" class="alert alert-error text-sm mt-3 hidden"></div>
 
             <div class="modal-action mt-4">
-                <button onclick="guardarRango()" id="btn-guardar-rango" class="btn btn-primary">Guardar</button>
+                <button type="button" onclick="guardarRango()" id="btn-guardar-rango" class="btn btn-primary">Guardar</button>
                 <form method="dialog"><button class="btn btn-ghost">Cancelar</button></form>
             </div>
         </div>
@@ -437,24 +441,25 @@
                 (<code>S000000001-S000000010</code>). Todos los campos de abajo se aplican por igual a cada línea.
             </p>
 
+            <form autocomplete="off" onsubmit="return false;">
             <div class="grid grid-cols-2 gap-3">
                 <div class="form-control col-span-2">
                     <label class="label py-1"><span class="label-text font-medium">Folios / rangos, uno por línea *</span></label>
-                    <textarea id="l-lineas" rows="6" placeholder="S000000001&#10;S000000010-S000000020&#10;S000000050"
+                    <textarea id="l-lineas" name="l-lineas-no-autofill" autocomplete="off" rows="6" placeholder="S000000001&#10;S000000010-S000000020&#10;S000000050"
                         class="textarea textarea-bordered font-mono text-sm w-full"></textarea>
                 </div>
                 <div class="form-control col-span-2">
                     <label class="label py-1"><span class="label-text font-medium">ID Item</span></label>
-                    <input type="text" id="l-folio" class="input input-bordered input-sm font-mono w-full" placeholder="Auto si se deja vacío" />
+                    <input type="text" id="l-folio" name="l-folio-no-autofill" autocomplete="new-password" class="input input-bordered input-sm font-mono w-full" placeholder="Auto si se deja vacío" />
                     <p class="text-xs text-base-content/40 mt-1">Se comparte entre todas las líneas del lote.</p>
                 </div>
                 <div class="form-control col-span-2">
                     <label class="label py-1"><span class="label-text font-medium">Nombre *</span></label>
-                    <input type="text" id="l-nombre" class="input input-bordered input-sm w-full" />
+                    <input type="text" id="l-nombre" name="l-nombre-no-autofill" autocomplete="new-password" class="input input-bordered input-sm w-full" />
                 </div>
                 <div class="form-control">
                     <label class="label py-1"><span class="label-text font-medium">Formato</span></label>
-                    <input type="text" id="l-formato" class="input input-bordered input-sm w-full" />
+                    <input type="text" id="l-formato" name="l-formato-no-autofill" autocomplete="new-password" class="input input-bordered input-sm w-full" />
                 </div>
                 <div class="form-control">
                     <label class="label py-1"><span class="label-text font-medium">Tipo *</span></label>
@@ -475,11 +480,12 @@
                     </select>
                 </div>
             </div>
+            </form>
 
             <div id="lote-error" class="alert alert-error text-sm mt-3 hidden"></div>
 
             <div class="modal-action mt-4">
-                <button onclick="guardarLote()" id="btn-guardar-lote" class="btn btn-primary">Guardar</button>
+                <button type="button" onclick="guardarLote()" id="btn-guardar-lote" class="btn btn-primary">Guardar</button>
                 <form method="dialog"><button class="btn btn-ghost">Cancelar</button></form>
             </div>
         </div>
