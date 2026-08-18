@@ -64,7 +64,11 @@ class AdminEmpresaController extends Controller
             $validated['logo'] = $request->file('logo')->store('logos', 'public');
         }
 
-        Empresa::create($validated);
+        $empresa = Empresa::create($validated);
+
+        if ($request->wantsJson()) {
+            return response()->json(['success' => true, 'empresa' => $empresa]);
+        }
 
         return redirect()->route('admin.empresas.index')
             ->with('success', 'Cliente creado correctamente.');

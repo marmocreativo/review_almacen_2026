@@ -119,7 +119,7 @@
                     <template x-for="(fila, index) in examenes" :key="fila.uid">
                         <div class="grid grid-cols-1 sm:grid-cols-[1fr_140px_auto] gap-2 items-end">
                             <div class="form-control">
-                                <label class="label py-1"><span class="label-text text-xs">Examen *</span></label>
+                                <label class="label py-1"><span class="label-text text-xs">Tipo de Examen *</span></label>
                                 <select :name="`examenes[${index}][tipo_examen_id]`"
                                     x-model="fila.tipo_examen_id"
                                     class="select select-bordered select-sm w-full">
@@ -130,7 +130,7 @@
                                 </select>
                             </div>
                             <div class="form-control">
-                                <label class="label py-1"><span class="label-text text-xs">Cantidad sesiones *</span></label>
+                                <label class="label py-1"><span class="label-text text-xs">Cantidad exámenes *</span></label>
                                 <input type="number" min="1" :name="`examenes[${index}][cantidad]`"
                                     x-model="fila.cantidad"
                                     class="input input-bordered input-sm w-full" />
@@ -154,10 +154,13 @@
                     <div class="form-control">
                         <label class="label"><span class="label-text">Fecha primer aplicación *</span></label>
                         <input type="date" name="FECHA_PRIMERA_APLICACION" value="{{ old('FECHA_PRIMERA_APLICACION') }}"
-                            :min="fechaMinima"
                             x-model="fechaPrimeraAplicacion"
                             class="input input-bordered @error('FECHA_PRIMERA_APLICACION') input-error @enderror" />
-                        <p class="text-xs text-base-content/40 mt-1" x-show="sedeId" x-text="'Fecha mínima permitida: ' + fechaMinima + (envioZona === 'cdmx_area_metropolitana' ? ' (10 días, zona metropolitana)' : ' (15 días, foráneo)')"></p>
+                        <p class="text-xs text-base-content/40 mt-1" x-show="sedeId" x-text="'Fecha recomendada: ' + fechaMinima + (envioZona === 'cdmx_area_metropolitana' ? ' (10 días, zona metropolitana)' : ' (15 días, foráneo)')"></p>
+                        <p class="text-xs text-warning mt-1 flex items-center gap-1" x-show="fechaFueraDeTiempo" x-cloak>
+                            <x-heroicon-o-exclamation-triangle class="w-4 h-4 shrink-0" />
+                            <span>Advertencia: la fecha elegida está antes del mínimo recomendado (<span x-text="fechaMinima"></span>). Verifica que la logística sea viable.</span>
+                        </p>
                         @error('FECHA_PRIMERA_APLICACION')<p class="text-error text-sm mt-1">{{ $message }}</p>@enderror
                     </div>
                     <div class="form-control">
@@ -227,6 +230,14 @@
             <div class="form-control mb-4">
                 <label class="label"><span class="label-text">RFC</span></label>
                 <input type="text" id="ne-rfc" class="input input-bordered input-sm" />
+            </div>
+            <div class="form-control mb-4">
+                <label class="label"><span class="label-text">Tipo de cliente *</span></label>
+                <select id="ne-tipo-cliente" class="select select-bordered select-sm">
+                    <option value="corporativo">Corporativo</option>
+                    <option value="academico">Académico</option>
+                    <option value="gobierno">Gobierno</option>
+                </select>
             </div>
             <div class="modal-action">
                 <button onclick="guardarEmpresa()" class="btn btn-primary btn-sm">Guardar</button>
@@ -326,6 +337,11 @@
             envioZona: '',
             fechaMinima: '',
             fechaPrimeraAplicacion: '',
+            get fechaFueraDeTiempo() {
+                return !!this.fechaPrimeraAplicacion
+                    && !!this.fechaMinima
+                    && this.fechaPrimeraAplicacion < this.fechaMinima;
+            },
             responsable: {
                 titulo: '',
                 nombre: '',
@@ -335,6 +351,34 @@
             examenes: [
                 { uid: crypto.randomUUID(), tipo_examen_id: '', cantidad: 1 },
             ],
+
+            async init() {
+                const params = new URLSearchParams(location.search);
+                const empresaId  = params.get('nueva_empresa') || params.get('empresa');
+                const sedeId     = params.get('nueva_sede') || params.get('sede');
+                const contactoId = params.get('nuevo_contacto');
+
+                if (!empresaId && !sedeId && !contactoId) return;
+
+                if (empresaId) {
+                    document.querySelector('[name="ID_EMPRESA"]').value = empresaId;
+                    await this.onEmpresaChange(empresaId);
+                    await this.$nextTick();
+                }
+
+                if (sedeId) {
+                    document.querySelector('[name="ID_SEDE"]').value = sedeId;
+                    await this.onSedeChange(sedeId);
+                    await this.$nextTick();
+                }
+
+                if (contactoId) {
+                    document.querySelector('[name="ID_CONTACTO"]').value = contactoId;
+                    this.onContactoChange(contactoId);
+                }
+
+                history.replaceState(null, '', location.pathname);
+            },
 
             agregarExamenFila() {
                 this.examenes.push({ uid: crypto.randomUUID(), tipo_examen_id: '', cantidad: 1 });
@@ -357,10 +401,6 @@
                 const fecha = new Date();
                 fecha.setDate(fecha.getDate() + dias);
                 this.fechaMinima = fecha.toISOString().split('T')[0];
-
-                if (this.fechaPrimeraAplicacion && this.fechaPrimeraAplicacion < this.fechaMinima) {
-                    this.fechaPrimeraAplicacion = this.fechaMinima;
-                }
             },
 
             async onEmpresaChange(id) {
@@ -423,18 +463,24 @@
 
         const res = await fetch(urlEmpresas, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': csrfToken
+            },
             body: JSON.stringify({
                 nombre,
                 razon_social: document.getElementById('ne-razon').value,
                 rfc: document.getElementById('ne-rfc').value,
+                tipo_cliente: document.getElementById('ne-tipo-cliente').value,
                 estado: 'activo',
             }),
         });
 
         if (res.ok) {
+            const data = await res.json();
             document.getElementById('modal-nueva-empresa').close();
-            location.reload();
+            location.href = location.pathname + '?nueva_empresa=' + data.empresa.id;
         }
     }
 
@@ -446,7 +492,7 @@
 
         const res = await fetch(`${urlSedesStore}/${empresaId}/sedes`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken },
             body: JSON.stringify({
                 nombre,
                 calle_y_numero: document.getElementById('ns-calle').value,
@@ -460,32 +506,36 @@
         });
 
         if (res.ok) {
+            const data = await res.json();
             document.getElementById('modal-nueva-sede').close();
-            location.reload();
+            location.href = location.pathname + `?empresa=${empresaId}&nueva_sede=${data.sede.id}`;
         }
     }
 
     // Guardar contacto rápido
     async function guardarContacto() {
+        const empresaId = document.querySelector('[name="ID_EMPRESA"]').value;
         const sedeId = document.querySelector('[name="ID_SEDE"]').value;
         const nombre = document.getElementById('nc-nombre').value.trim();
         const apellidos = document.getElementById('nc-apellidos').value.trim();
         if (!sedeId || !nombre || !apellidos) { alert('Selecciona una sede y completa nombre y apellidos.'); return; }
 
-        const res = await fetch(`{{ url('admin/empresas') }}/${document.querySelector('[name="ID_EMPRESA"]').value}/sedes/${sedeId}/contactos`, {
+        const res = await fetch(`{{ url('admin/empresas') }}/${empresaId}/contactos`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken },
             body: JSON.stringify({
                 nombre,
                 apellidos,
                 telefono: document.getElementById('nc-telefono').value,
                 correo: document.getElementById('nc-correo').value,
+                sedes: [sedeId],
             }),
         });
 
         if (res.ok) {
+            const data = await res.json();
             document.getElementById('modal-nuevo-contacto').close();
-            location.reload();
+            location.href = location.pathname + `?empresa=${empresaId}&sede=${sedeId}&nuevo_contacto=${data.contacto.id}`;
         }
     }
 </script>

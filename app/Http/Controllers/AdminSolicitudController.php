@@ -163,16 +163,6 @@ class AdminSolicitudController extends Controller
             'examenes.*.cantidad'        => 'required|integer|min:1',
         ]);
 
-        // Validar fecha mínima según zona (10 días metropolitana, 15 foráneo)
-        $diasMinimos = $request->ENVIO_ZONA === 'cdmx_area_metropolitana' ? 10 : 15;
-        $fechaMinima = Carbon::now()->addDays($diasMinimos)->format('Y-m-d');
-
-        if ($request->FECHA_PRIMERA_APLICACION < $fechaMinima) {
-            return back()->withInput()->withErrors([
-                'FECHA_PRIMERA_APLICACION' => "La fecha mínima de primer aplicación para esta zona es {$fechaMinima} ({$diasMinimos} días de anticipación).",
-            ]);
-        }
-
         $solicitud = DB::transaction(function () use ($request) {
             // Nombres de examen agrupados (sin duplicados) y total de candidatos
             $tipos = TipoExamen::whereIn('id', collect($request->examenes)->pluck('tipo_examen_id'))
@@ -321,22 +311,10 @@ class AdminSolicitudController extends Controller
         return view('admin.solicitudes.show-envio', compact('solicitud', 'tipoExamenes', 'examenesData', 'puedeMarcarEnviada'));
     }
 
-    // ── ¿El examen tiene al menos un ID Item y cada uno cubre la cantidad de candidatos? ──
+    // ── ¿El examen tiene al menos un artículo/ID Item asignado? (la cantidad exacta es solo informativa) ──
     private function examenListoParaEnvio(SolicitudExamen $examen): bool
     {
-        $porFolio = $examen->articulos->groupBy('FOLIO');
-
-        if ($porFolio->isEmpty()) {
-            return false;
-        }
-
-        foreach ($porFolio as $items) {
-            if ($items->sum('CANTIDAD_ENVIADA') < $examen->CANTIDAD) {
-                return false;
-            }
-        }
-
-        return true;
+        return $examen->articulos->isNotEmpty();
     }
 
     // ── ¿Todos los exámenes de la solicitud están listos para marcar como enviada? ──

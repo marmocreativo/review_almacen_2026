@@ -100,7 +100,7 @@
                         <template x-for="(fila, index) in examenes" :key="fila.uid">
                             <div class="grid grid-cols-1 sm:grid-cols-[1fr_140px_auto] gap-2 items-end">
                                 <div class="form-control">
-                                    <label class="label py-1"><span class="label-text text-xs">Examen *</span></label>
+                                    <label class="label py-1"><span class="label-text text-xs">Tipo de Examen *</span></label>
                                     <select :name="`examenes[${index}][tipo_examen_id]`"
                                         x-model="fila.tipo_examen_id"
                                         @change="validarFila(fila)"
@@ -118,7 +118,7 @@
                                     <p class="text-error text-xs mt-1" x-show="fila.tocado && fila.errorTipo" x-text="fila.errorTipo"></p>
                                 </div>
                                 <div class="form-control">
-                                    <label class="label py-1"><span class="label-text text-xs">Cantidad sesiones *</span></label>
+                                    <label class="label py-1"><span class="label-text text-xs">Cantidad de examenes *</span></label>
                                     <input type="number" min="1" :name="`examenes[${index}][cantidad]`"
                                         x-model.number="fila.cantidad"
                                         @input="validarFila(fila)" @blur="fila.tocado = true"
