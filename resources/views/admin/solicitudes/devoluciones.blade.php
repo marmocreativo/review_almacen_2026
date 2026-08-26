@@ -41,14 +41,26 @@
                             <th>Empresa / Sede</th>
                             <th>Responsable</th>
                             <th>Fecha solicitud</th>
-                            <th class="text-center">Artículos</th>
+                            <th class="text-center">Devueltos</th>
+                            <th class="text-center">Estado</th>
                             <th></th>
                         </tr>
                     </thead>
                     <tbody>
                         @forelse($solicitudes as $solicitud)
                             @php
-                                $esEnviada = $solicitud->isEnviada();
+                                $esEnviada    = $solicitud->isEnviada();
+                                $total        = $solicitud->articulos_count;
+                                $retornados   = $solicitud->articulos_retornados_count;
+                                $pendientes   = $total - $retornados;
+
+                                if ($retornados === 0) {
+                                    $estadoBadge = ['label' => 'Enviada', 'class' => 'badge-info'];
+                                } elseif ($retornados < $total) {
+                                    $estadoBadge = ['label' => 'Parcial', 'class' => 'badge-warning'];
+                                } else {
+                                    $estadoBadge = ['label' => 'Procesado', 'class' => 'badge-success'];
+                                }
                             @endphp
                             <tr>
                                 <td class="font-mono text-sm">{{ $solicitud->ID_SOLICITUD }}</td>
@@ -61,7 +73,15 @@
                                     <p class="text-sm text-base-content/60">{{ $solicitud->RESPONSABLE_CORREO }}</p>
                                 </td>
                                 <td class="text-sm">{{ \Carbon\Carbon::parse($solicitud->FECHA_SOLICITUD)->format('d/m/Y') }}</td>
-                                <td class="text-center font-mono">{{ $solicitud->articulos_count }}</td>
+                                <td class="text-center">
+                                    <span class="font-mono">{{ $retornados }} / {{ $total }}</span>
+                                    @if($pendientes > 0)
+                                        <p class="text-xs text-base-content/40">{{ $pendientes }} pendiente{{ $pendientes !== 1 ? 's' : '' }}</p>
+                                    @endif
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge badge-sm {{ $estadoBadge['class'] }}">{{ $estadoBadge['label'] }}</span>
+                                </td>
                                 <td>
                                     <div class="flex gap-1 justify-end">
                                         @if($esEnviada)
@@ -95,7 +115,19 @@
             <div class="md:hidden">
                 @forelse($solicitudes as $solicitud)
                     @php
-                        $esEnviada = $solicitud->isEnviada();
+                        $esEnviada    = $solicitud->isEnviada();
+                        $total        = $solicitud->articulos_count;
+                        $retornados   = $solicitud->articulos_retornados_count;
+                        $pendientes   = $total - $retornados;
+
+                        if ($retornados === 0) {
+                            $estadoBadge = ['label' => 'Enviada', 'class' => 'badge-info'];
+                        } elseif ($retornados < $total) {
+                            $estadoBadge = ['label' => 'Parcial', 'class' => 'badge-warning'];
+                        } else {
+                            $estadoBadge = ['label' => 'Procesado', 'class' => 'badge-success'];
+                        }
+
                         $tabClasses = $esEnviada ? 'bg-info/20 text-info-content border-info/40' : 'bg-success/20 text-success-content border-success/40';
                         $cardBorder = $esEnviada ? 'border-info/40' : 'border-success/40';
                     @endphp
@@ -119,10 +151,10 @@
                                             {{ \Carbon\Carbon::parse($solicitud->FECHA_SOLICITUD)->format('d/m/Y') }}
                                         </p>
                                         <p class="text-xs font-mono text-base-content/40 mt-0.5">
-                                            {{ $solicitud->articulos_count }} art.
+                                            {{ $retornados }} / {{ $total }} art.
                                         </p>
-                                        <span class="badge badge-xs {{ $esEnviada ? 'badge-info' : 'badge-success' }} mt-1">
-                                            {{ $esEnviada ? 'Por retornar' : 'En devolución' }}
+                                        <span class="badge badge-xs {{ $estadoBadge['class'] }} mt-1">
+                                            {{ $estadoBadge['label'] }}
                                         </span>
                                     </div>
                                 </div>

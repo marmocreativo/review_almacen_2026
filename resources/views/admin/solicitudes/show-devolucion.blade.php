@@ -47,7 +47,8 @@
     @endif
 
     <form method="POST" action="{{ route('admin.solicitudes.devolucion.procesar', $solicitud) }}" id="form-devolucion"
-        x-data="{ reeditando: false }" @reeditando-toggle.window="reeditando = !reeditando">
+        x-data="{ reeditando: false }" @reeditando-toggle.window="reeditando = !reeditando"
+        @change="$store.devolucion.recalc()">
         @csrf
         <input type="hidden" name="reedicion" x-bind:value="reeditando ? 1 : 0" />
         @if($cajasAbiertas->isNotEmpty())
@@ -158,7 +159,7 @@
                                             </td>
                                             <td>
                                                 <select name="items[{{ $sa->ID }}][estado_devolucion]"
-                                                    class="select select-bordered select-xs w-full item-estado-devolucion" required>
+                                                    class="select select-bordered select-xs w-full item-estado-devolucion">
                                                     <option value="">Selecciona…</option>
                                                     <option value="aplicado">Aplicado</option>
                                                     <option value="no_aplicado">No aplicado</option>
@@ -183,11 +184,16 @@
         @endforelse
 
         @if($solicitud->isEnviada())
-            <div class="flex justify-end">
-                <button type="submit" class="btn btn-primary gap-1"
+            <div class="flex items-center justify-end gap-3 flex-wrap">
+                <span class="text-sm text-base-content/60">
+                    Artículos <span class="font-semibold" x-text="$store.devolucion.procesados"></span> / <span x-text="$store.devolucion.total"></span>
+                </span>
+                <button type="submit"
+                    class="btn gap-1"
+                    :class="$store.devolucion.procesados < $store.devolucion.total ? 'btn-warning' : 'btn-primary'"
                     onclick="return confirm('¿Procesar la devolución de los artículos marcados? Esta acción no se puede deshacer.')">
                     <x-heroicon-o-check class="w-4 h-4" />
-                    Procesar devolución
+                    <span x-text="$store.devolucion.procesados < $store.devolucion.total ? 'Procesar retorno parcial' : 'Procesar todos los artículos'"></span>
                 </button>
             </div>
         @elseif($solicitud->isRetornada())
@@ -202,12 +208,27 @@
     </form>
 
     <script>
+        document.addEventListener('alpine:init', () => {
+            Alpine.store('devolucion', {
+                procesados: {{ $solicitud->articulos->where('ESTADO', 'retornado')->count() }},
+                total: {{ $solicitud->articulos->count() }},
+                recalc() {
+                    this.procesados = Array.from(
+                        document.querySelectorAll('select[name^="items"][name$="[estado_devolucion]"]')
+                    ).filter(select => select.value !== '').length;
+                },
+            });
+        });
+
         function marcarTodos(grupo, valor) {
             const tbody = document.querySelector(`tbody[data-examen-group="${grupo}"]`);
             if (!tbody) return;
             tbody.querySelectorAll('.item-estado-devolucion').forEach(select => {
                 select.value = valor;
             });
+            if (window.Alpine && Alpine.store('devolucion')) {
+                Alpine.store('devolucion').recalc();
+            }
         }
     </script>
 </x-app-layout>

@@ -1130,7 +1130,7 @@ class AdminSolicitudController extends Controller
             'reedicion'                    => 'nullable|boolean',
             'items'                        => 'required|array',
             'items.*.id'                   => 'required|integer|exists:al_solicitudes_articulos,ID',
-            'items.*.estado_devolucion'    => 'required|in:aplicado,no_aplicado,danado,faltante',
+            'items.*.estado_devolucion'    => 'nullable|in:aplicado,no_aplicado,danado,faltante',
             'items.*.nombre_candidato'     => 'nullable|string|max:255',
         ]);
 
@@ -1155,6 +1155,11 @@ class AdminSolicitudController extends Controller
                 $sa = SolicitudArticulo::find($itemData['id']);
 
                 if (!$sa || $sa->ID_SOLICITUD != $solicitud->ID_SOLICITUD) {
+                    continue;
+                }
+
+                // Artículo dejado en blanco (aún no llega): se omite, sigue pendiente.
+                if (empty($itemData['estado_devolucion'])) {
                     continue;
                 }
 
@@ -1597,6 +1602,9 @@ public function generarCartaWord(Solicitud $solicitud)
         $query = Solicitud::with(['empresa', 'sede'])
             ->withCount('examenes')
             ->withCount('articulos')
+            ->withCount(['articulos as articulos_retornados_count' => function ($q) {
+                $q->where('ESTADO', 'retornado');
+            }])
             ->whereIn('ESTADO_SOLICITUD', ['enviada', 'retornada']);
 
         if ($request->filled('busqueda')) {
