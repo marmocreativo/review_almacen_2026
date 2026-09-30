@@ -14,6 +14,13 @@ class AdminArticuloController extends Controller
     {
         $tiposExamen = TipoExamen::where('estado', 'activo')->orderBy('nombre')->get();
 
+        $formatos = Articulo::query()
+            ->whereNotNull('FORMATO')
+            ->where('FORMATO', '!=', '')
+            ->distinct()
+            ->orderBy('FORMATO')
+            ->pluck('FORMATO');
+
         $query = Articulo::with('tipoExamen');
 
         // Búsqueda simple
@@ -34,9 +41,6 @@ class AdminArticuloController extends Controller
             if ($request->filled('serie')) {
                 $query->where('SERIE', 'like', '%' . $request->serie . '%');
             }
-            if ($request->filled('formato')) {
-                $query->where('FORMATO', 'like', '%' . $request->formato . '%');
-            }
         }
 
         if ($request->filled('tipo')) {
@@ -45,6 +49,19 @@ class AdminArticuloController extends Controller
         if ($request->filled('tipo_examen')) {
             $query->where('ID_TIPO_EXAMEN', $request->tipo_examen);
         }
+
+        if ($request->filled('formato')) {
+            $query->where('FORMATO', $request->formato);
+        }
+
+        // Totales de los resultados filtrados (antes de ordenar y paginar)
+        $totales = (clone $query)
+            ->selectRaw('
+                COALESCE(SUM(CANTIDAD_ALMACEN), 0)     as almacen,
+                COALESCE(SUM(CANTIDAD_SOLICITUDES), 0) as solicitudes,
+                COALESCE(SUM(CANTIDAD_DESTRUCCION), 0) as destruccion
+            ')
+            ->first();
 
         // Ordenamiento
         $ordenables = [
@@ -71,6 +88,8 @@ class AdminArticuloController extends Controller
                 'paginator'   => $paginator,
                 'vista'       => 'detalle',
                 'tiposExamen' => $tiposExamen,
+                'formatos'    => $formatos,
+                'totales'     => $totales,
             ]);
         }
 
@@ -120,6 +139,8 @@ class AdminArticuloController extends Controller
             'paginator'   => $paginator,
             'vista'       => 'bloques',
             'tiposExamen' => $tiposExamen,
+            'formatos'    => $formatos,
+            'totales'     => $totales,
         ]);
     }
 

@@ -58,6 +58,17 @@
                     </select>
                 </div>
                 <div class="form-control w-40">
+                    <label class="label py-0"><span class="label-text text-xs">Formato</span></label>
+                    <select name="formato" class="select select-bordered select-sm w-full">
+                        <option value="">Todos</option>
+                        @foreach($formatos as $formato)
+                            <option value="{{ $formato }}" {{ request('formato') === $formato ? 'selected' : '' }}>
+                                {{ $formato }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="form-control w-40">
                     <label class="label py-0"><span class="label-text text-xs">Ordenar por</span></label>
                     <select name="orden" class="select select-bordered select-sm w-full">
                         <option value="FOLIO" {{ request('orden', 'FOLIO') === 'FOLIO' ? 'selected' : '' }}>ID Item</option>
@@ -84,6 +95,14 @@
             </div>
         </div>
     </form>
+
+    {{-- RESUMEN DE RESULTADOS --}}
+    <p class="text-sm text-base-content/70 mb-4">
+        Con los filtros actuales hay
+        <strong>{{ number_format($totales->almacen) }}</strong> pieza(s) en almacén,
+        <strong>{{ number_format($totales->solicitudes) }}</strong> en solicitudes y
+        <strong>{{ number_format($totales->destruccion) }}</strong> en destrucción.
+    </p>
 
     {{-- Barra de acciones + tabla + modal de edición (comparten estado Alpine) --}}
     <div x-data="{...seleccionArticulos(), ...edicionArticulo()}" x-cloak>
